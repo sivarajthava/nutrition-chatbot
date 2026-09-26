@@ -1,0 +1,47 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  title     String?
+  messages  Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  claims    Claim[]
+}
+
+model Claim {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  claimText String
+  source    String?
+  createdAt DateTime @default(now())
+}
+
+model FailureLog {
+  id           String   @id @default(uuid())
+  questionId   Int
+  category     String
+  questionText String
+  runNumber    Int
+  responseText String
+  failureTypes String
+  notes        String?
+  createdAt    DateTime @default(now())
+}
