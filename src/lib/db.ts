@@ -1,4 +1,19 @@
 import { PrismaClient } from "@prisma/client";
+import fs from "fs";
+
+// Ensure DATABASE_URL fallback on Linux container environments (Railway, Docker)
+if (!process.env.DATABASE_URL && process.platform === "linux") {
+  if (fs.existsSync("/data")) {
+    try {
+      fs.accessSync("/data", fs.constants.W_OK);
+      process.env.DATABASE_URL = "file:/data/dev.db";
+    } catch {
+      process.env.DATABASE_URL = "file:/tmp/dev.db";
+    }
+  } else {
+    process.env.DATABASE_URL = "file:/tmp/dev.db";
+  }
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -14,32 +29,37 @@ export async function saveMessageToDB(
   content: string,
   claims?: Array<{ claim_text: string; source: null }>
 ) {
-  // Ensure session exists
-  await prisma.session.upsert({
-    where: { id: sessionId },
-    update: { updatedAt: new Date() },
-    create: { id: sessionId, title: "Chat Session" }
-  });
+  try {
+    // Ensure session exists
+    await prisma.session.upsert({
+      where: { id: sessionId },
+      update: { updatedAt: new Date() },
+      create: { id: sessionId, title: "Chat Session" }
+    });
 
-  // Create message and optional claims atomically
-  return prisma.message.create({
-    data: {
-      sessionId,
-      role,
-      content,
-      claims: claims
-        ? {
-            create: claims.map((c) => ({
-              claimText: c.claim_text,
-              source: null
-            }))
-          }
-        : undefined
-    },
-    include: {
-      claims: true
-    }
-  });
+    // Create message and optional claims atomically
+    return await prisma.message.create({
+      data: {
+        sessionId,
+        role,
+        content,
+        claims: claims
+          ? {
+              create: claims.map((c) => ({
+                claimText: c.claim_text,
+                source: null
+              }))
+            }
+          : undefined
+      },
+      include: {
+        claims: true
+      }
+    });
+  } catch (err: any) {
+    console.warn("saveMessageToDB database warning:", err?.message || err);
+    return null;
+  }
 }
 
 export async function getSessionHistory(sessionId: string) {

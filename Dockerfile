@@ -30,13 +30,14 @@ RUN adduser --system --uid 1001 nextjs
 # Persistent storage mount point for SQLite (e.g. Railway Volume mounted at /data)
 RUN mkdir -p /data && chown nextjs:nodejs /data
 
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/prisma ./prisma
+COPY --chown=nextjs:nodejs --from=builder /app/public ./public
+COPY --chown=nextjs:nodejs --from=builder /app/.next ./.next
+COPY --chown=nextjs:nodejs --from=builder /app/node_modules ./node_modules
+COPY --chown=nextjs:nodejs --from=builder /app/package.json ./package.json
+COPY --chown=nextjs:nodejs --from=builder /app/prisma ./prisma
+COPY --chown=nextjs:nodejs --from=builder /app/scripts ./scripts
 
 USER nextjs
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm run start"]
+CMD ["npm", "run", "start"]
