@@ -5,6 +5,21 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import { ChatBox } from "./components/ChatBox";
 import { ClaimsInspector } from "./components/ClaimsInspector";
 
+// Resolve API endpoint URL:
+// 1. If VITE_API_URL is set, use it.
+// 2. In Vite dev mode (import.meta.env.DEV), use relative paths handled by Vite proxy.
+// 3. In production/preview/static deployment, default directly to Railway production backend.
+const getApiUrl = (path: string): string => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    return `${envUrl.replace(/\/+$/, "")}${path}`;
+  }
+  if (import.meta.env.DEV) {
+    return path;
+  }
+  return `https://nutrition-chatbot-production.up.railway.app${path}`;
+};
+
 export function App() {
   const [sessionId, setSessionId] = useState<string>(() => {
     return localStorage.getItem("active_session_id") || `session-${Date.now()}`;
@@ -26,8 +41,9 @@ export function App() {
   useEffect(() => {
     async function checkHealth() {
       try {
-        const res = await fetch("/api/health");
-        if (res.ok) {
+        const res = await fetch(getApiUrl("/api/health"));
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
           const data = await res.json();
           setServerHealth({
             status: "online",
@@ -55,8 +71,9 @@ export function App() {
   // Fetch session list
   const refreshSessions = async () => {
     try {
-      const res = await fetch("/api/sessions");
-      if (res.ok) {
+      const res = await fetch(getApiUrl("/api/sessions"));
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("application/json")) {
         const data = await res.json();
         if (Array.isArray(data.sessions)) {
           setSessions(data.sessions);
@@ -78,8 +95,9 @@ export function App() {
 
     async function fetchHistory() {
       try {
-        const res = await fetch(`/api/history/${sessionId}`);
-        if (res.ok) {
+        const res = await fetch(getApiUrl(`/api/history/${sessionId}`));
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
           const data = await res.json();
           if (Array.isArray(data.messages) && isMounted) {
             const parsed: ChatMessage[] = data.messages.map((m: any) => ({
@@ -131,16 +149,21 @@ export function App() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(getApiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, message: text })
       });
 
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(`Unexpected server response (HTTP ${res.status}). Ensure backend is reachable.`);
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || data.details || "Request failed");
+        throw new Error(data.error || data.details || `Request failed with status ${res.status}`);
       }
 
       const responsePayload = data as NutritionAssistantResponse;
@@ -182,7 +205,7 @@ export function App() {
   // Delete a session
   const handleDeleteSession = async (idToDelete: string) => {
     try {
-      await fetch(`/api/sessions?sessionId=${idToDelete}`, { method: "DELETE" });
+      await fetch(getApiUrl(`/api/sessions?sessionId=${idToDelete}`), { method: "DELETE" });
       setSessions((prev) => prev.filter((s) => s.id !== idToDelete));
       if (sessionId === idToDelete) {
         handleNewSession();
