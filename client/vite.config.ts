@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const targetServer = env.VITE_API_URL || "http://localhost:3000";
+  const targetServer = env.VITE_API_URL || "https://nutrition-chatbot-production.up.railway.app";
 
   return {
     plugins: [react(), tailwindcss()],
