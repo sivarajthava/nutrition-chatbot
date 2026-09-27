@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { PromptChips } from "./PromptChips";
@@ -12,6 +10,7 @@ interface ChatInputProps {
 export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const MAX_CHARS = 1500;
 
   useEffect(() => {
@@ -47,7 +46,7 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
       {/* Preset Prompt Chips */}
       <PromptChips onSelectPrompt={(q) => onSendMessage(q)} disabled={isLoading} />
 
-      {/* Input Box */}
+      {/* Input Form */}
       <form
         onSubmit={handleSubmit}
         className="relative flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm focus-within:border-emerald-500 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-2"

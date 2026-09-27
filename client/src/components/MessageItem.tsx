@@ -1,65 +1,58 @@
-"use client";
-
-import React, { useState } from "react";
-import { User, Bot, Copy, Check, ListChecks } from "lucide-react";
+import { useState } from "react";
+import { ChatMessage, ClaimItem } from "../types";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { Claim } from "@/types/nutrition";
+import { Bot, User, Copy, Check, ListChecks } from "lucide-react";
 
 interface MessageItemProps {
-  role: "user" | "assistant" | "system";
-  content: string;
-  claims?: Claim[];
-  onInspectClaims?: (claims: Claim[]) => void;
+  message: ChatMessage;
+  onInspectClaims?: (claims: ClaimItem[]) => void;
 }
 
-export function MessageItem({ role, content, claims, onInspectClaims }: MessageItemProps) {
+export function MessageItem({ message, onInspectClaims }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
-  const isUser = role === "user";
+  const isUser = message.role === "user";
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const claimsCount = claims?.length || 0;
+  const claimsCount = message.claims?.length || 0;
 
   return (
-    <div
-      className={`flex gap-3.5 ${
-        isUser ? "flex-row-reverse" : "flex-row"
-      } items-start my-4`}
-    >
-      <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${
-          isUser
-            ? "bg-slate-800 dark:bg-slate-700 text-white"
-            : "bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs"
-        }`}
-      >
-        {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-      </div>
+    <div className={`flex gap-3 my-4 ${isUser ? "justify-end" : "justify-start"}`}>
+      {/* Bot Avatar */}
+      {!isUser && (
+        <div className="w-8 h-8 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-1">
+          <Bot className="w-4 h-4" />
+        </div>
+      )}
 
+      {/* Message Card */}
       <div
         className={`max-w-[85%] md:max-w-[75%] rounded-2xl p-4 shadow-xs relative group ${
           isUser
             ? "bg-emerald-600 text-white rounded-tr-xs"
-            : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-xs"
+            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-xs"
         }`}
       >
+        {/* Message Content */}
         {isUser ? (
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
         ) : (
           <div>
-            <MarkdownRenderer content={content} />
+            <MarkdownRenderer content={message.content} />
 
+            {/* Bottom Actions Bar for Assistant */}
             <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+              {/* Claims Badge Counter */}
               {claimsCount > 0 ? (
                 <button
                   type="button"
-                  onClick={() => onInspectClaims && onInspectClaims(claims || [])}
+                  onClick={() => onInspectClaims && onInspectClaims(message.claims || [])}
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors"
-                  title="Inspect atomic factual claims in sidecar panel"
+                  title="Inspect atomic factual claims extracted from this answer"
                 >
                   <ListChecks className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span>
@@ -70,6 +63,7 @@ export function MessageItem({ role, content, claims, onInspectClaims }: MessageI
                 <span className="text-[11px] text-slate-400">Parametric response</span>
               )}
 
+              {/* Action Buttons */}
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -85,6 +79,13 @@ export function MessageItem({ role, content, claims, onInspectClaims }: MessageI
           </div>
         )}
       </div>
+
+      {/* User Avatar */}
+      {isUser && (
+        <div className="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center shrink-0 shadow-xs mt-1">
+          <User className="w-4 h-4" />
+        </div>
+      )}
     </div>
   );
 }

@@ -23,13 +23,22 @@ const PRESCRIPTIVE_CALORIE_REGEX = [
   /\bhow\s+many\s+calories\s+(should|can|do|does|must|would|could)?\s*(i|we|a\s+person|someone|an\s+adult|she|he|my\s+friend|one)?\s*(need(\s+to)?|eat|consume|intake|take\s+in)\b/i,
   /\bhow\s+many\s+calories\s+.*(need\s+to\s+eat|should\s+eat|to\s+lose|to\s+burn)\b/i,
   /\bcalculate\s+(my|a|an|the)?\s*(daily\s+)?(calorie|calories|tdee|bmr|caloric)\s*(target|goal|deficit|need|allowance|intake)\b/i,
-  /\b(my|personal|daily|recommended)\s*(calorie|calories|kcal)\s*(target|goal|deficit|limit|intake)\b/i,
+  /\b(exact|my|personal|daily|recommended|optimal|target|prescribed|ideal)\s*(calorie|calories|kcal|energy)\s*(target|goal|deficit|limit|intake|prescription)\b/i,
   /\b(\d{3,4})\s*(kcal|calorie|calories)\s*(daily\s+)?(meal\s+plan|diet|deficit|target|plan)\b/i,
   /\bcalorie\s+deficit\s+(to|for|of)\s+(\d+|\w+)?\s*(lose|weight|fat|drop)\b/i,
   /\bhow\s+many\s+calories\s+(to\s+lose|to\s+drop|for\s+weight\s+loss)\b/i,
-  /\b(energy\s+restriction|negative\s+energy\s+balance)\s*(for\s+weight\s+loss|in\s+kcal|to\s+lose)\b/i,
+  /\b(daily\s+)?(energy\s+restriction|negative\s+energy\s+balance)\s*(in\s+(kcal|kilocalories|calories)|for\s+weight\s+loss|to\s+lose|to\s+achieve)?\b/i,
+  /\b(what\s+should|calculate)\s+(my\s+)?(daily\s+)?(energy\s+restriction|caloric\s+restriction)\b/i,
+  /\b(to\s+)?achieve\s+negative\s+energy\s+balance\b/i,
   // Spaced / de-obfuscated: c-a-l-o-r-i-e or c a l o r i e target
-  /\bc[\s\-]*a[\s\-]*l[\s\-]*o[\s\-]*r[\s\-]*i[\s\-]*e\s*(target|deficit|goal|plan)\b/i
+  /\bc[\s\-]*a[\s\-]*l[\s\-]*o[\s\-]*r[\s\-]*i[\s\-]*e\s*(target|deficit|goal|plan)\b/i,
+  // Macro calculations for caloric restriction / deficit
+  /\bcalculate\s+(my|a|an|the)?\s*(daily\s+)?(macros?|caloric\s+macros?)\s*(target|goal|split|deficit|intake)\s*(for\s+weight\s+loss|to\s+cut|to\s+lose)?\b/i,
+  // Direct deficit requests in kcal or calories
+  /\b(what\s+should\s+my|how\s+much\s+should\s+my|what\s+is\s+my)\s*(daily\s+)?(deficit|caloric\s+deficit)\b/i,
+  /\bdaily\s+deficit\s*(be)?\s*(in\s+kcal|in\s+calories|for\s+weight\s+loss|to\s+lose)\b/i,
+  // Extreme starvation and purging requests
+  /\b(starvation\s+diet|starve\s+myself\s+to\s+lose|how\s+to\s+purge|purge\s+after\s+(eating|a\s+meal))\b/i
 ];
 
 // Educational queries about calories that MUST be allowed (false positive prevention)
@@ -66,10 +75,15 @@ const BENIGN_WEIGHT_REGEX = [
 
 const MEDICAL_ADVICE_PATTERNS = [
   /\b(cure|treat|heal|reverse|manage\s+my|eliminate)\s+(my\s+)?(diabetes|type\s*[12]\s*diabetes|cancer|hypertension|kidney\s+disease|ckd|eating\s+disorder|anorexia|bulimia|renal\s+failure|cirrhosis|pancreatitis|gallstones)\b/i,
-  /\bwhat\s+should\s+i\s+eat\s+for\s+(stage\s+\d+\s+)?(kidney\s+disease|renal\s+disease|liver\s+failure|chemotherapy|renal\s+failure)\b/i,
+  /\b(diagnosed\s+with|have)\s+.*(cure|treat|heal|reverse|what\s+foods?\s+(should|to)\s+(i\s+)?eat)\b/i,
+  /\b(stage\s+\d+\s+)?(chronic\s+)?(kidney\s+disease|ckd|renal\s+disease|renal\s+failure)\b.*(protein|daily\s+grams|what\s+to\s+eat|diet|food|intake)\b/i,
+  /\b(protein|daily\s+grams|what\s+to\s+eat|diet|food|intake)\b.*(stage\s+\d+\s+)?(chronic\s+)?(kidney\s+disease|ckd|renal\s+disease|renal\s+failure)\b/i,
+  /\b(stage\s+\d+)\s+(chronic\s+)?(kidney\s+disease|ckd|cancer|renal\s+disease)\b/i,
+  /\bwhat\s+should\s+i\s+eat\s+for\s+(stage\s+\d+\s+)?(kidney\s+disease|renal\s+disease|liver\s+failure|chemotherapy|renal\s+failure|cancer|tumors?)\b/i,
   /\bwhat\s+diet\s+will\s+(dissolve|cure|heal|reverse)\s+(my\s+)?(kidney\s+stones|diabetes|hypertension|tumors?)\b/i,
-  /\b(fasting\s+blood\s+sugar|glucose|blood\s+pressure)\s*(is\s*)?(\d{2,3})\s*(mg\/dl|mmhg)?\s*.*(what\s+to\s+eat|cure|treat|lower\s+immediately)\b/i,
+  /\b(fasting\s+blood\s+sugar|glucose|blood\s+pressure|hba1c)\s*(is\s*)?(\d{2,3}(\.\d)?)\s*(mg\/dl|mmhg|%)?\s*.*(what\s+to\s+eat|cure|treat|lower\s+immediately)\b/i,
   /\bdiagnose\s+(my|me)\b/i,
+  /\bwithout\s+taking\s+(my\s+)?(insulin|metformin|blood\s+pressure|statin|medication|pills?|drugs?)\b/i,
   /\bstop\s+taking\s+(my\s+)?(insulin|metformin|blood\s+pressure|statin|medication)\b/i,
   /\bshould\s+i\s+stop\s+(my\s+)?medication\b/i
 ];
@@ -78,7 +92,10 @@ const MEDICAL_ADVICE_PATTERNS = [
 // Main Scope Evaluator
 // ---------------------------------------------------------------------------
 
-export function evaluateScopeGuardrail(rawInput: string): GuardrailResult {
+export function evaluateScopeGuardrail(
+  rawInput: string,
+  historyContext: Array<{ role: string; content: string }> = []
+): GuardrailResult {
   const normalized = normalizeInput(rawInput);
 
   if (normalized.length === 0) {
@@ -90,6 +107,14 @@ export function evaluateScopeGuardrail(rawInput: string): GuardrailResult {
     };
   }
 
+  // Combine context if recent turn introduced an ambiguous setup
+  const lastUserTurn = historyContext
+    .filter((m) => m.role === "user")
+    .slice(-1)[0]?.content;
+  const contextToCheck = lastUserTurn
+    ? `${normalizeInput(lastUserTurn)} ${normalized}`
+    : normalized;
+
   // 1. Check Calorie Targets
   const isEducationalCalorie = BENIGN_EDUCATIONAL_CALORIE_REGEX.some((re) =>
     re.test(normalized)
@@ -97,7 +122,7 @@ export function evaluateScopeGuardrail(rawInput: string): GuardrailResult {
 
   if (!isEducationalCalorie) {
     for (const pattern of PRESCRIPTIVE_CALORIE_REGEX) {
-      if (pattern.test(normalized)) {
+      if (pattern.test(normalized) || (lastUserTurn && pattern.test(contextToCheck))) {
         return {
           allowed: false,
           reason: "calorie_target",
@@ -116,7 +141,7 @@ export function evaluateScopeGuardrail(rawInput: string): GuardrailResult {
 
   if (!isEducationalWeight) {
     for (const pattern of WEIGHT_TARGET_PATTERNS) {
-      if (pattern.test(normalized)) {
+      if (pattern.test(normalized) || (lastUserTurn && pattern.test(contextToCheck))) {
         return {
           allowed: false,
           reason: "weight_recommendation",
@@ -130,7 +155,7 @@ export function evaluateScopeGuardrail(rawInput: string): GuardrailResult {
 
   // 3. Check Medical Advice & Clinical Disease Treatment
   for (const pattern of MEDICAL_ADVICE_PATTERNS) {
-    if (pattern.test(normalized)) {
+    if (pattern.test(normalized) || (lastUserTurn && pattern.test(contextToCheck))) {
       return {
         allowed: false,
         reason: "medical_advice",

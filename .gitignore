@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+client/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -13,12 +14,11 @@
 # testing
 /coverage
 
-# next.js
+# next.js & client builds
 /.next/
 /out/
-
-# production
 /build
+client/dist
 
 # misc
 .DS_Store

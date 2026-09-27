@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { evaluateScopeGuardrail, normalizeInput } from "@/lib/guardrails";
-import { generateNutritionResponse } from "@/lib/gemini";
+import { generateNutritionResponse } from "@/lib/groq";
 import { saveMessageToDB, getSessionHistory } from "@/lib/db";
 
 export const maxDuration = 30;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization"
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,14 +24,14 @@ export async function POST(req: NextRequest) {
     if (typeof message !== "string") {
       return NextResponse.json(
         { error: "Invalid message payload. 'message' must be a string." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (message.length > 1500) {
       return NextResponse.json(
         { error: "Payload too large. Please limit questions to 1,500 characters." },
-        { status: 413 }
+        { status: 413, headers: corsHeaders }
       );
     }
 
@@ -29,24 +39,11 @@ export async function POST(req: NextRequest) {
     if (cleanMessage.length === 0) {
       return NextResponse.json(
         { error: "Invalid message payload. Message cannot be empty or solely whitespace." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // Step 1: Pre-LLM Deterministic Scope Guardrail Intercept
-    const guardrailCheck = evaluateScopeGuardrail(cleanMessage);
-    if (!guardrailCheck.allowed && guardrailCheck.refusalResponse) {
-      await saveMessageToDB(sessionId, "user", cleanMessage);
-      await saveMessageToDB(
-        sessionId,
-        "assistant",
-        guardrailCheck.refusalResponse.answer,
-        guardrailCheck.refusalResponse.claims
-      );
-      return NextResponse.json(guardrailCheck.refusalResponse, { status: 200 });
-    }
-
-    // Step 2: Fetch Recent Session History for Multi-Turn Context (Edge Case SC-22)
+    // Step 1: Fetch Recent Session History for Multi-Turn Context (Edge Cases SC-03 & SC-22)
     let history: Array<{ role: "user" | "assistant"; content: string }> = [];
     try {
       const dbMessages = await getSessionHistory(sessionId);
@@ -60,21 +57,34 @@ export async function POST(req: NextRequest) {
       console.warn("Could not retrieve session history:", dbErr);
     }
 
-    // Step 3: Invoke Gemini LLM with Structured Output & Schema Enforcement
+    // Step 2: Pre-LLM Deterministic Scope Guardrail Intercept (Evaluating Current Turn + Context)
+    const guardrailCheck = evaluateScopeGuardrail(cleanMessage, history);
+    if (!guardrailCheck.allowed && guardrailCheck.refusalResponse) {
+      await saveMessageToDB(sessionId, "user", cleanMessage);
+      await saveMessageToDB(
+        sessionId,
+        "assistant",
+        guardrailCheck.refusalResponse.answer,
+        guardrailCheck.refusalResponse.claims
+      );
+      return NextResponse.json(guardrailCheck.refusalResponse, { status: 200, headers: corsHeaders });
+    }
+
+    // Step 3: Invoke Groq LLM with Structured Output & Schema Enforcement
     let validatedData;
     try {
       validatedData = await generateNutritionResponse(cleanMessage, history);
     } catch (modelErr: any) {
-      console.error("Gemini model execution error:", modelErr);
-      const isConfigError = modelErr.message?.includes("GEMINI_API_KEY");
+      console.error("Groq model execution error:", modelErr);
+      const isConfigError = modelErr.message?.includes("GROQ_API_KEY");
       return NextResponse.json(
         {
           error: isConfigError
-            ? "Gemini API key is not configured."
+            ? "Groq API key is not configured."
             : "Failed to generate structured response from model.",
           details: modelErr.message
         },
-        { status: isConfigError ? 500 : 502 }
+        { status: isConfigError ? 500 : 502, headers: corsHeaders }
       );
     }
 
@@ -93,12 +103,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 5: Return 200 OK NutritionAssistantResponse JSON
-    return NextResponse.json(validatedData, { status: 200 });
+    return NextResponse.json(validatedData, { status: 200, headers: corsHeaders });
   } catch (error: any) {
     console.error("API /api/chat error:", error);
     return NextResponse.json(
       { error: "Server error processing request.", details: error.message },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

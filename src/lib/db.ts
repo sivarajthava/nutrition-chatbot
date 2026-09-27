@@ -49,3 +49,58 @@ export async function getSessionHistory(sessionId: string) {
     include: { claims: true }
   });
 }
+
+export async function clearSessionHistory(sessionId: string) {
+  return prisma.session.deleteMany({
+    where: { id: sessionId }
+  });
+}
+
+export async function listSessions() {
+  return prisma.session.findMany({
+    orderBy: { updatedAt: "desc" },
+    include: {
+      messages: {
+        take: 1,
+        orderBy: { createdAt: "desc" }
+      }
+    }
+  });
+}
+
+export async function deleteSession(sessionId: string) {
+  return prisma.session.delete({
+    where: { id: sessionId }
+  });
+}
+
+export interface FailureLogEntry {
+  questionId: number;
+  category: string;
+  questionText: string;
+  runNumber: number;
+  responseText: string;
+  failureTypes: string;
+  notes?: string;
+}
+
+export async function saveFailureLogToDB(entry: FailureLogEntry) {
+  return prisma.failureLog.create({
+    data: {
+      questionId: entry.questionId,
+      category: entry.category,
+      questionText: entry.questionText,
+      runNumber: entry.runNumber,
+      responseText: entry.responseText,
+      failureTypes: entry.failureTypes,
+      notes: entry.notes ?? null
+    }
+  });
+}
+
+export async function getFailureLogs() {
+  return prisma.failureLog.findMany({
+    orderBy: { createdAt: "desc" }
+  });
+}
+

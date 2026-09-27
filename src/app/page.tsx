@@ -1,49 +1,143 @@
-import React from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import { ChatContainer } from "@/components/chat/ChatContainer";
 import { SourcesPanel } from "@/components/sources/SourcesPanel";
-import { Salad, ShieldCheck } from "lucide-react";
+import { HeaderBar } from "@/components/chat/HeaderBar";
+import { SessionSidebar } from "@/components/chat/SessionSidebar";
+import { Claim, ChatSession, ServerHealth } from "@/types/nutrition";
 
 export default function Home() {
-  const sessionId = "default-session";
+  const [sessionId, setSessionId] = useState<string>("default-session");
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeClaims, setActiveClaims] = useState<Claim[]>([]);
+  const [isClaimsOpen, setIsClaimsOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const [serverHealth, setServerHealth] = useState<ServerHealth>({
+    status: "checking"
+  });
+
+  // Check server health
+  useEffect(() => {
+    async function checkHealth() {
+      try {
+        const res = await fetch("/api/health");
+        if (res.ok) {
+          const data = await res.json();
+          setServerHealth({
+            status: "online",
+            service: data.service,
+            version: data.version,
+            milestone: data.milestone,
+            provider: data.provider,
+            model: data.model,
+            guardrails: data.guardrails
+          });
+        } else {
+          setServerHealth({ status: "offline" });
+        }
+      } catch (err) {
+        setServerHealth({ status: "offline" });
+      }
+    }
+
+    checkHealth();
+  }, []);
+
+  // Fetch sessions list
+  const refreshSessions = async () => {
+    try {
+      const res = await fetch("/api/sessions");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.sessions)) {
+          setSessions(data.sessions);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch sessions list:", err);
+    }
+  };
+
+  useEffect(() => {
+    refreshSessions();
+  }, []);
+
+  const handleNewSession = () => {
+    const newId = `session-${Date.now()}`;
+    setSessionId(newId);
+    setActiveClaims([]);
+    setIsSidebarOpen(false);
+  };
+
+  const handleDeleteSession = async (idToDelete: string) => {
+    try {
+      await fetch(`/api/sessions?sessionId=${idToDelete}`, { method: "DELETE" });
+      setSessions((prev) => prev.filter((s) => s.id !== idToDelete));
+      if (sessionId === idToDelete) {
+        handleNewSession();
+      }
+    } catch (err) {
+      console.error("Failed to delete session:", err);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col font-sans">
-      {/* Top Header */}
-      <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 md:px-8 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-            <Salad className="w-4 h-4" />
-          </div>
-          <div>
-            <h1 className="font-bold text-sm md:text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              AI Nutrition Assistant
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold tracking-wide">
-                Milestone 1
-              </span>
-            </h1>
-          </div>
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950 font-sans">
+      {/* Multi-Session Sidebar Drawer */}
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={sessionId}
+        onSelectSession={(id) => {
+          setSessionId(id);
+          setIsSidebarOpen(false);
+        }}
+        onNewSession={handleNewSession}
+        onDeleteSession={handleDeleteSession}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Main Workspace Column */}
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <HeaderBar
+          serverHealth={serverHealth}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          onToggleClaims={() => setIsClaimsOpen((prev) => !prev)}
+          claimsCount={activeClaims.length}
+        />
+
+        {/* Main Content Area: Chat Panel + Claims Sidecar */}
+        <div className="flex-1 flex overflow-hidden p-3 md:p-6 gap-4 md:gap-6 min-h-0">
+          {/* Chat Panel */}
+          <main className="flex-1 flex flex-col h-full min-w-0">
+            <ChatContainer
+              sessionId={sessionId}
+              onInspectClaims={(claims) => {
+                setActiveClaims(claims);
+              }}
+              onSessionUpdated={refreshSessions}
+            />
+          </main>
+
+          {/* Sources & Citations Sidecar */}
+          <aside
+            className={`transition-all duration-200 ease-in-out shrink-0 ${
+              isClaimsOpen
+                ? "w-80 md:w-96 rounded-2xl overflow-hidden shadow-sm flex flex-col"
+                : "hidden"
+            }`}
+          >
+            <SourcesPanel
+              claims={activeClaims}
+              isOpen={isClaimsOpen}
+              onClose={() => setIsClaimsOpen(false)}
+            />
+          </aside>
         </div>
-
-        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="hidden sm:inline">Guardrails Active</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Dual-Panel View */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 min-h-0">
-        {/* Chat Panel */}
-        <section className="lg:col-span-8 h-[calc(100vh-5rem)] min-h-[500px]">
-          <ChatContainer sessionId={sessionId} />
-        </section>
-
-        {/* Sources & Citations Sidecar */}
-        <section className="lg:col-span-4 h-[calc(100vh-5rem)] min-h-[300px]">
-          <SourcesPanel />
-        </section>
-      </main>
+      </div>
     </div>
   );
 }

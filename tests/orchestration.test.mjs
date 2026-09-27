@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { GEMINI_RESPONSE_SCHEMA } from "../src/lib/gemini.ts";
+import { GROQ_RESPONSE_SCHEMA } from "../src/lib/groq.ts";
 import { NUTRITION_SYSTEM_PROMPT } from "../src/lib/prompts/systemPrompt.ts";
 import { evaluateScopeGuardrail, normalizeInput } from "../src/lib/guardrails.ts";
 import { NutritionAssistantResponseSchema } from "../src/lib/validation.ts";
@@ -10,6 +11,18 @@ test("Orchestration: System prompt enforces tone, scope exclusions, and null sou
   assert(NUTRITION_SYSTEM_PROMPT.includes("Never provide personal calorie prescriptions"));
   assert(NUTRITION_SYSTEM_PROMPT.includes("source': MUST BE NULL"));
   assert(NUTRITION_SYSTEM_PROMPT.includes("food, human nutrition, food science, culinary safety"));
+});
+
+test("Orchestration: Groq Structured Output Schema conforms to contract", () => {
+  assert.strictEqual(GROQ_RESPONSE_SCHEMA.type, "object");
+  assert(GROQ_RESPONSE_SCHEMA.properties.answer);
+  assert(GROQ_RESPONSE_SCHEMA.properties.claims);
+  assert.deepStrictEqual(GROQ_RESPONSE_SCHEMA.required, ["answer", "claims"]);
+
+  const claimItemProps = GROQ_RESPONSE_SCHEMA.properties.claims.items.properties;
+  assert(claimItemProps.claim_text);
+  assert(claimItemProps.source);
+  assert.strictEqual(claimItemProps.source.type, "null");
 });
 
 test("Orchestration: Gemini Structured Output Schema conforms to contract", () => {

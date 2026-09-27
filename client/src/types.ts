@@ -1,26 +1,20 @@
-export interface Claim {
+export interface ClaimItem {
   claim_text: string;
-  source: null; // Strictly null in Milestone 1
-}
-
-export interface NutritionAssistantResponse {
-  answer: string;
-  claims: Claim[];
+  source: string | null;
 }
 
 export interface ChatMessage {
   id: string;
   sessionId: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant";
   content: string;
-  claims?: Claim[];
+  claims?: ClaimItem[];
   createdAt: string;
 }
 
-export interface GuardrailResult {
-  allowed: boolean;
-  reason?: "calorie_target" | "weight_recommendation" | "medical_advice";
-  refusalResponse?: NutritionAssistantResponse;
+export interface NutritionAssistantResponse {
+  answer: string;
+  claims: ClaimItem[];
 }
 
 export interface ChatSession {

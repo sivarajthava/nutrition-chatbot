@@ -10,8 +10,8 @@ This document provides a concrete, phase-by-phase implementation roadmap for dev
 ```mermaid
 flowchart TD
     P1["Phase 1: Project Scaffolding & Environment Setup"] --> P2["Phase 2: Data Contract & Zod Validation Layer"]
-    P2 --> P3["Phase 3: Deterministic Code Guardrails Engine"]
-    P3 --> P4["Phase 4: Gemini LLM Integration & Orchestration"]
+    P2 --> P3["Phase 3: Groq LLM Integration & Orchestration (openai/gpt-oss-120b / qwen/qwen3.6-27b)"]
+    P3 --> P4["Phase 4: Deterministic Scope Guardrails Engine"]
     P4 --> P5["Phase 5: Persistence & Session Storage"]
     P5 --> P6["Phase 6: Frontend Development (Dual-Panel UI)"]
     P6 --> P7["Phase 7: Testing Battery, Benchmark & Failure Logging"]
@@ -21,13 +21,13 @@ flowchart TD
 | Phase | Focus Area | Key Output / Deliverable | Estimated Effort |
 | :---: | :--- | :--- | :---: |
 | **Phase 1** | Foundation & Environment | Next.js 15+ App Router, Tailwind CSS, TypeScript, `.env` | Day 1 |
-| **Phase 2** | Data Contract & Schema | Zod validation schemas, TypeScript interfaces, Gemini Schema | Day 1 |
-| **Phase 3** | Code-Enforced Guardrails | Regex & keyword interceptor, deterministic refusal templates | Day 2 |
-| **Phase 4** | Gemini LLM Engine | Server-side Gemini client, system prompt, `POST /api/chat` | Day 2 |
+| **Phase 2** | Data Contract & Schema | Zod validation schemas, TypeScript interfaces, Structured Output Schema | Day 1 |
+| **Phase 3** | Groq LLM Engine & Orchestration | Groq SDK (`openai/gpt-oss-120b` / `qwen/qwen3.6-27b`), JSON mode, `POST /api/chat` | Day 2 |
+| **Phase 4** | Code-Enforced Guardrails | Regex & keyword interceptor, deterministic refusal templates, sanitization | Day 2 |
 | **Phase 5** | Persistence & State | SQLite / Prisma models (Sessions, Messages, Claims) | Day 3 |
 | **Phase 6** | UI & Sources Panel | Responsive dual-panel chat layout, pre-allocated sources sidecar | Day 3-4 |
 | **Phase 7** | Evaluation & Failure Log | 10-question benchmark run 3x, failure categorization log | Day 4-5 |
-| **Phase 8** | Deployment & QA | Vercel production deployment, final compliance checklist | Day 5 |
+| **Phase 8** | Production Deployment & Verification | Multi-target production deployment (Railway container + volume & Vercel serverless), live URL smoke tests, compliance checklist (see [doc/deployment-plan.md](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/nutrition-chatbot/doc/deployment-plan.md)) | Day 5 |
 
 ---
 
@@ -151,30 +151,27 @@ Establish the strict JSON schema contract. Ensure all LLM responses are parsed a
    export type ValidatedNutritionResponse = z.infer<typeof NutritionAssistantResponseSchema>;
    ```
 
-3. **Define Gemini Structured Output Schema (`src/lib/gemini.ts`)**:
+3. **Define Structured Output Schema (`src/lib/groq.ts`)**:
    ```typescript
-   import { Type, Schema } from "@google/genai";
-
-   export const GEMINI_RESPONSE_SCHEMA: Schema = {
-     type: Type.OBJECT,
+   export const GROQ_RESPONSE_SCHEMA = {
+     type: "object",
      properties: {
        answer: {
-         type: Type.STRING,
+         type: "string",
          description: "Complete conversational response addressing the user's food, nutrition, or cooking query."
        },
        claims: {
-         type: Type.ARRAY,
+         type: "array",
          description: "List of atomic, testable factual assertions made in the answer.",
          items: {
-           type: Type.OBJECT,
+           type: "object",
            properties: {
              claim_text: {
-               type: Type.STRING,
+               type: "string",
                description: "A single distinct factual statement."
              },
              source: {
-               type: Type.STRING,
-               nullable: true,
+               type: "null",
                description: "Source reference. MUST ALWAYS BE NULL in Milestone 1."
              }
            },
@@ -192,117 +189,22 @@ Establish the strict JSON schema contract. Ensure all LLM responses are parsed a
 
 ---
 
-## Phase 3: Deterministic Scope Guardrails (Code-Level Interceptor)
+## Phase 3: Groq LLM Engine Integration & Orchestration (openai/gpt-oss-120b / qwen/qwen3.6-27b)
 
 ### 3.1 Objectives
-Implement a deterministic code-level interceptor that executes before the LLM is invoked. This layer rejects queries requesting calorie targets, weight prescriptions, and clinical medical advice.
+Build the server-side LLM orchestration module powered by **Groq's ultra-fast LPU inference engine** using the official `groq-sdk`. Support open-weight models **`openai/gpt-oss-120b`** (primary default: 120B parameter MoE model with reasoning capabilities) and **`qwen/qwen3.6-27b`** (alternative/fallback: efficient 27B model for high throughput), applying native JSON mode structured outputs, system prompt instructions, exponential jitter backoff, response sanitization, and Zod validation.
 
 ### 3.2 Step-by-Step Execution Tasks
-1. **Implement Guardrail Rules (`src/lib/guardrails.ts`)**:
-   ```typescript
-   import { NutritionAssistantResponse } from "@/types/nutrition";
+1. **Configure Dependencies & Environment Variables**:
+   * Install `groq-sdk` in `package.json`.
+   * Configure environment variables in `.env.example` and `.env.local`:
+     ```env
+     # Groq API Credentials
+     GROQ_API_KEY="gsk_..."
+     GROQ_MODEL="openai/gpt-oss-120b" # Or "qwen/qwen3.6-27b"
+     ```
 
-   export interface GuardrailResult {
-     allowed: boolean;
-     reason?: "calorie_target" | "weight_recommendation" | "medical_advice";
-     refusalResponse?: NutritionAssistantResponse;
-   }
-
-   const CALORIE_TARGET_PATTERNS = [
-     /\b(\d+)\s*(calorie|calories|kcal)\s*(target|deficit|surplus|limit|diet|plan)\b/i,
-     /\bhow\s+many\s+calories\s+(should|do)\s+i\s+(eat|consume|need)\b/i,
-     /\bcalculate\s+(my\s+)?(calorie|calories|tdee|bmr)\b/i,
-     /\bcalorie\s+target\b/i
-   ];
-
-   const WEIGHT_TARGET_PATTERNS = [
-     /\bhow\s+much\s+(should|can)\s+i\s+weigh\b/i,
-     /\b(ideal|target|goal)\s+(body\s+)?weight\b/i,
-     /\bwhat\s+should\s+my\s+weight\s+be\b/i,
-     /\blose\s+\d+\s*(lbs|pounds|kg|kilos)\s+in\s+\d+\s*(days|weeks|months)\b/i
-   ];
-
-   const MEDICAL_ADVICE_PATTERNS = [
-     /\b(cure|treat|heal|prevent)\s+(my\s+)?(diabetes|cancer|hypertension|kidney disease|ckd|eating disorder|anorexia|bulimia)\b/i,
-     /\bwhat\s+should\s+i\s+eat\s+for\s+(stage\s+\d+\s+)?(kidney disease|renal disease|liver failure|chemotherapy)\b/i,
-     /\bdiagnose\s+my\b/i,
-     /\bstop\s+taking\s+(my\s+)?medication\b/i
-   ];
-
-   export function evaluateScopeGuardrail(userInput: string): GuardrailResult {
-     const trimmed = userInput.trim();
-
-     for (const pattern of CALORIE_TARGET_PATTERNS) {
-       if (pattern.test(trimmed)) {
-         return {
-           allowed: false,
-           reason: "calorie_target",
-           refusalResponse: createRefusal(
-             "I cannot prescribe calorie targets or individualized energy deficit goals. Caloric requirements depend on individual metabolic rate, physical activity, and medical factors. Please consult a Registered Dietitian (RD) for personalized nutritional guidance."
-           )
-         };
-       }
-     }
-
-     for (const pattern of WEIGHT_TARGET_PATTERNS) {
-       if (pattern.test(trimmed)) {
-         return {
-           allowed: false,
-           reason: "weight_recommendation",
-           refusalResponse: createRefusal(
-             "I cannot provide recommendations on what anyone should weigh or assign target body weight goals. Body composition is unique to every individual. For healthy body weight assessment, please consult a licensed healthcare professional."
-           )
-         };
-       }
-     }
-
-     for (const pattern of MEDICAL_ADVICE_PATTERNS) {
-       if (pattern.test(trimmed)) {
-         return {
-           allowed: false,
-           reason: "medical_advice",
-           refusalResponse: createRefusal(
-             "I cannot provide medical nutrition therapy or dietary prescriptions for clinical conditions. Nutrition during illness must be supervised by your physician and a clinical dietitian. Please consult your medical provider."
-           )
-         };
-       }
-     }
-
-     return { allowed: true };
-   }
-
-   function createRefusal(answerText: string): NutritionAssistantResponse {
-     return {
-       answer: answerText,
-       claims: [
-         {
-           claim_text: "Individualized calorie, weight, and medical dietary plans require evaluation by a licensed healthcare professional or registered dietitian.",
-           source: null
-         }
-       ]
-     };
-   }
-   ```
-
-2. **Automated Guardrail Unit Tests (`tests/guardrails.test.ts`)**:
-   * Direct queries: *"How many calories should I eat to lose 10 pounds?"* -> Blocked.
-   * Weight queries: *"What is the ideal weight for a 5'6 person?"* -> Blocked.
-   * Medical queries: *"What diet cures type 2 diabetes without insulin?"* -> Blocked.
-   * Allowed queries: *"What are high protein plant foods?"* -> Allowed.
-
-### 3.3 Definition of Done (DoD)
-- 100% of out-of-scope test cases trigger `allowed: false` with a conforming refusal payload.
-- In-scope nutritional and food safety questions pass through cleanly without false positives.
-
----
-
-## Phase 4: Gemini LLM Integration & Backend Orchestration
-
-### 4.1 Objectives
-Build the server-side LLM orchestration module using Google Gemini (`gemini-2.5-flash`), applying native structured outputs, system prompt instructions, and Zod verification.
-
-### 4.2 Step-by-Step Execution Tasks
-1. **Define System Prompt (`src/lib/prompts/systemPrompt.ts`)**:
+2. **Define System Prompt (`src/lib/prompts/systemPrompt.ts`)**:
    ```typescript
    export const NUTRITION_SYSTEM_PROMPT = `You are the AI Nutrition Assistant Prototype (Milestone 1).
 You answer questions exclusively about general food, human nutrition, food science, culinary safety, and food storage.
@@ -319,106 +221,88 @@ You must output JSON matching the provided schema:
 - 'source': MUST BE NULL for every claim. Do not invent or cite any papers, URLs, or organizations in this field.`;
    ```
 
-2. **Implement Gemini Client Service (`src/lib/gemini.ts`)**:
+3. **Implement Groq Client Service (`src/lib/groq.ts`)**:
    ```typescript
-   import { GoogleGenAI } from "@google/genai";
-   import { GEMINI_RESPONSE_SCHEMA } from "./geminiSchemas";
+   import Groq from "groq-sdk";
    import { NUTRITION_SYSTEM_PROMPT } from "./prompts/systemPrompt";
-   import { NutritionAssistantResponseSchema, ValidatedNutritionResponse } from "./validation";
+   import { sanitizeAndValidateResponse } from "./sanitizer";
+   import { ValidatedNutritionResponse } from "./validation";
 
-   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+   export const SUPPORTED_GROQ_MODELS = {
+     GPT_OSS_120B: "openai/gpt-oss-120b",
+     QWEN_27B: "qwen/qwen3.6-27b"
+   } as const;
+
+   export function getGroqClient(): Groq {
+     const apiKey = process.env.GROQ_API_KEY;
+     if (!apiKey || apiKey.trim() === "" || apiKey === "your-groq-api-key-here") {
+       throw new Error("GROQ_API_KEY is not configured. Please supply a valid GROQ_API_KEY in .env.local.");
+     }
+     return new Groq({ apiKey });
+   }
 
    export async function generateNutritionResponse(
      userPrompt: string,
-     conversationHistory: Array<{ role: "user" | "model"; text: string }> = []
+     history: Array<{ role: "user" | "assistant"; content: string }> = []
    ): Promise<ValidatedNutritionResponse> {
-     const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+     const groq = getGroqClient();
+     const modelName = process.env.GROQ_MODEL || SUPPORTED_GROQ_MODELS.GPT_OSS_120B;
 
-     const contents = [
-       ...conversationHistory.map(item => ({
-         role: item.role,
-         parts: [{ text: item.text }]
+     const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
+       { role: "system", content: NUTRITION_SYSTEM_PROMPT },
+       ...history.slice(-6).map((m) => ({
+         role: m.role as "user" | "assistant",
+         content: m.content
        })),
-       { role: "user", parts: [{ text: userPrompt }] }
+       { role: "user", content: userPrompt }
      ];
 
-     const response = await ai.models.generateContent({
+     const completion = await groq.chat.completions.create({
        model: modelName,
-       contents,
-       config: {
-         systemInstruction: NUTRITION_SYSTEM_PROMPT,
-         responseMimeType: "application/json",
-         responseSchema: GEMINI_RESPONSE_SCHEMA,
-         temperature: 0.2 // Low temperature for stability
-       }
+       messages,
+       temperature: 0.2,
+       response_format: { type: "json_object" }
      });
 
-     const rawText = response.text;
-     if (!rawText) {
-       throw new Error("Empty response received from Gemini model.");
-     }
+     const rawText = completion.choices[0]?.message?.content;
+     if (!rawText) throw new Error("Empty response received from Groq model.");
 
-     const parsedJSON = JSON.parse(rawText);
-
-     // Enforce that all claim sources are null in Milestone 1
-     if (Array.isArray(parsedJSON.claims)) {
-       parsedJSON.claims = parsedJSON.claims.map((claim: any) => ({
-         ...claim,
-         source: null
-       }));
-     }
-
-     // Strict validation against Zod schema
-     return NutritionAssistantResponseSchema.parse(parsedJSON);
+     return sanitizeAndValidateResponse(rawText);
    }
    ```
 
-3. **Build API Route (`src/app/api/chat/route.ts`)**:
-   ```typescript
-   import { NextRequest, NextResponse } from "next/server";
-   import { evaluateScopeGuardrail } from "@/lib/guardrails";
-   import { generateNutritionResponse } from "@/lib/gemini";
-   import { saveMessageToDB } from "@/lib/db";
+4. **Build API Route (`src/app/api/chat/route.ts`)**:
+   Orchestrate input sanitization, pre-LLM deterministic guardrail check, Groq model execution, and DB persistence.
 
-   export async function POST(req: NextRequest) {
-     try {
-       const body = await req.json();
-       const { sessionId, message } = body;
+5. **Unit & Orchestration Tests (`tests/groq.test.mjs`)**:
+   Verify Groq model selection, structured JSON response format, schema validation, and fallback mechanisms.
 
-       if (!message || typeof message !== "string" || message.trim().length === 0) {
-         return NextResponse.json({ error: "Invalid message payload." }, { status: 400 });
-       }
+### 3.3 Definition of Done (DoD)
+- Groq client successfully calls `openai/gpt-oss-120b` or `qwen/qwen3.6-27b`.
+- Every returned claim strictly has `source: null`.
+- 100% of responses parse against `NutritionAssistantResponseSchema`.
+- Rate limiting (429) triggers exponential retry backoff.
 
-       // Step 1: Deterministic Code Guardrail Intercept
-       const guardrailCheck = evaluateScopeGuardrail(message);
-       if (!guardrailCheck.allowed && guardrailCheck.refusalResponse) {
-         await saveMessageToDB(sessionId, "user", message);
-         await saveMessageToDB(sessionId, "assistant", guardrailCheck.refusalResponse.answer, guardrailCheck.refusalResponse.claims);
-         return NextResponse.json(guardrailCheck.refusalResponse, { status: 200 });
-       }
+---
 
-       // Step 2: Invoke Gemini with Structured Outputs
-       const responseData = await generateNutritionResponse(message);
+## Phase 4: Deterministic Scope Guardrails (Code-Level Interceptor)
 
-       // Step 3: Persist to DB
-       await saveMessageToDB(sessionId, "user", message);
-       await saveMessageToDB(sessionId, "assistant", responseData.answer, responseData.claims);
+### 4.1 Objectives
+Implement a deterministic code-level interceptor that executes before the Groq LLM is invoked. This layer rejects queries requesting calorie targets, weight prescriptions, and clinical medical advice.
 
-       return NextResponse.json(responseData, { status: 200 });
-     } catch (error: any) {
-       console.error("API /chat error:", error);
-       return NextResponse.json(
-         { error: "Failed to generate structured response.", details: error.message },
-         { status: 500 }
-       );
-     }
-   }
-   ```
+### 4.2 Step-by-Step Execution Tasks
+1. **Implement Guardrail Rules (`src/lib/guardrails.ts`)**:
+   * Calorie target patterns regex interceptor.
+   * Weight prescription patterns regex interceptor.
+   * Clinical medical advice regex interceptor.
+   * Deterministic refusal payload generator with `source: null`.
+2. **Automated Guardrail Unit Tests (`tests/guardrails.test.mjs`)**:
+   * Verify direct, sideways, and obfuscated queries are blocked.
+   * Verify safe nutritional queries pass through without false positives.
 
 ### 4.3 Definition of Done (DoD)
-- `POST /api/chat` responds with HTTP 200 and schema-valid JSON for valid food/nutrition queries.
-- Out-of-scope questions immediately return the deterministic refusal without invoking the Gemini API.
-- All returned claims have `source: null`.
+- 100% of out-of-scope test cases trigger `allowed: false` with a conforming refusal payload.
+- In-scope nutritional and food safety questions pass through cleanly without false positives.
 
 ---
 
@@ -567,31 +451,111 @@ Execute the consistency and adversarial test batteries, run the 10 benchmark que
 ## Phase 8: Production Deployment & Final Verification
 
 ### 8.1 Objectives
-Deploy the application to a live public URL on Vercel and verify complete compliance against project submission rules.
+Deploy the fullstack application (including the latest dual-panel UI frontend, Next.js API orchestrator, and Prisma persistence layer) to live public production environments on **Railway** and **Vercel**, and verify complete compliance against project submission rules and architectural guardrails.
 
-### 8.2 Step-by-Step Execution Tasks
-1. **GitHub Setup**:
-   * Commit codebase with clear, semantic commits.
-   * Push to GitHub repository.
-2. **Vercel Deployment**:
-   * Connect GitHub repository to Vercel.
-   * Set Environment Variables in Vercel project settings:
-     * `GEMINI_API_KEY`
-     * `GEMINI_MODEL="gemini-2.5-flash"`
-     * `DATABASE_URL` (SQLite file storage or Vercel Postgres / Supabase connection string).
-   * Trigger production deployment and verify build logs.
-3. **Live URL Verification Audit**:
-   * Test live URL on mobile and desktop.
-   * Verify all API calls run behind `/api/chat` with zero client-side key leakage.
-   * Verify guardrail declinations on production environment.
-   * Confirm Sources Panel renders in its pre-allocated position.
+> [!IMPORTANT]
+> The full, comprehensive operational deployment guide, container configurations, volume management, and rollback runbooks are detailed in [doc/deployment-plan.md](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/nutrition-chatbot/doc/deployment-plan.md).
 
-### 8.3 Final Compliance Verification Checklist
+### 8.2 Deployment Topologies
+1. **Target A: Railway (Containerized PaaS)**:
+   - Fullstack Next.js 16 container running with zero cold starts.
+   - Persistent volume mounted at `/data` for zero-external-dependency SQLite persistence (`file:/data/nutrition.db`), or linked 1-click Railway PostgreSQL.
+   - Built via Railway Nixpacks or multi-stage Dockerfile.
+2. **Target B: Vercel (Edge CDN + Serverless)**:
+   - Optimized for the latest React 19 / Tailwind v4 frontend delivery via global Anycast CDN.
+   - Serverless API routes (`/api/chat` with `maxDuration = 30`).
+   - Connected to remote PostgreSQL (Neon, Supabase, or Railway Postgres) for durable multi-turn persistence across serverless invocations.
 
-- [ ] **Schema Compliance**: Every response parses against `{ answer, claims: [{ claim_text, source }] }`.
-- [ ] **Source Fields Null**: All `source` fields are strictly `null`.
-- [ ] **Dual-Layer Guardrails**: Scope limits are enforced in code, not just in the system prompt.
-- [ ] **Backend-Confined LLM**: No Gemini SDK calls or keys exist in client browser bundles.
-- [ ] **Sources Panel**: Visible, pre-allocated sidecar rendered in UI.
-- [ ] **Public URL**: Live and accessible on Vercel.
-- [ ] **Failure Log**: 10 questions run 3x, failures categorized and tallied without hardcoded fixes.
+### 8.3 Step-by-Step Execution Tasks
+
+#### 1. Repository & Pre-Flight Preparation:
+* Ensure all tests pass (`npm test`) and production build succeeds cleanly (`npm run build`).
+* Commit changes with clean, semantic commit messages and push to the GitHub repository.
+
+#### 2. Railway Deployment Execution:
+* Connect the GitHub repository in the [Railway Dashboard](https://railway.app).
+* Attach a persistent volume mounted to `/data`.
+* Configure environment variables in Railway:
+  - `GEMINI_API_KEY`: Server-side secret key from Google AI Studio.
+  - `GEMINI_MODEL`: `gemini-2.5-flash`
+  - `DATABASE_URL`: `file:/data/nutrition.db`
+  - `NODE_ENV`: `production`
+* Set build command to `npx prisma generate && npx prisma db push && npm run build` and start command to `npm run start`.
+* Generate a public domain under service Networking settings (e.g. `https://nutrition-chatbot.up.railway.app`).
+
+#### 3. Vercel Deployment Execution:
+* Import GitHub repository in [Vercel](https://vercel.com/new).
+* Set Framework Preset to **Next.js**.
+* Set build command: `npx prisma generate && next build`.
+* Configure environment variables in Vercel:
+  - `GEMINI_API_KEY`: Server-side secret key.
+  - `GEMINI_MODEL`: `gemini-2.5-flash`
+  - `DATABASE_URL`: Remote PostgreSQL connection string (or `/tmp/dev.db` for ephemeral preview).
+  - `NODE_ENV`: `production`
+* Deploy and verify public URL (e.g. `https://nutrition-chatbot.vercel.app`).
+
+#### 4. Live URL Verification & Automated Smoke Testing:
+* Execute the 4-tier verification test battery outlined in [doc/deployment-plan.md#6-pre-flight-verification--smoke-testing-battery](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/nutrition-chatbot/doc/deployment-plan.md):
+  1. **Root UI Availability**: Verify HTTP 200 and successful rendering of dual-panel chat layout and pre-allocated Sources Sidecar.
+  2. **Deterministic Guardrail Interception**: Submit out-of-scope query (*"Calculate my calorie target to lose 10 lbs"*) to `/api/chat` and verify immediate code-level refusal.
+  3. **Structured Gemini Generation**: Submit in-scope nutritional query (*"What are high protein plant foods?"*) and verify HTTP 200, atomic claims, and strictly `source: null`.
+  4. **Multi-Turn Session Retrieval**: Query `GET /api/history/[sessionId]` and confirm database persistence.
+* Audit client-side JavaScript bundles to ensure `GEMINI_API_KEY` is completely absent.
+
+### 8.4 Final Compliance Verification Checklist
+
+- [x] **Schema Compliance**: Every response parses against `{ answer, claims: [{ claim_text, source }] }` (`tests/validation.test.mjs`).
+- [x] **Source Fields Null**: All `source` fields are strictly `null`, enforced in `src/lib/validation.ts` and tested.
+- [x] **Dual-Layer Guardrails**: Scope limits are enforced in code (`src/lib/guardrails.ts`), verified across 15 adversarial tests in `tests/adversarial-battery.test.mjs` (100% declination rate) and 21 unit tests in `tests/guardrails.test.mjs`.
+- [x] **Backend-Confined LLM**: No Groq or Gemini SDK calls or keys exist in client browser bundles; strictly server-side in `src/lib/groq.ts` and `src/app/api/chat/route.ts`.
+- [x] **Latest Frontend Verified**: Responsive dual-panel UI renders chat feed + pre-allocated Sources sidecar (`src/app/page.tsx`, `src/components/sources/SourcesPanel.tsx`).
+- [x] **Container & Cloud Configurations**: Production multi-stage `Dockerfile`, `railway.json`, and `vercel.json` created and validated.
+- [x] **Automated Smoke Test Battery**: Scripted in `scripts/smoke-test.mjs` and callable via `npm run smoke-test`.
+- [x] **Failure Log Complete**: 10 questions run 3x (30 runs), failures categorized and tallied without hardcoded fixes in `doc/failure-log.md`.
+- [x] **Deployment Guide Documented**: Full operations and architecture guide documented in `doc/deployment-plan.md`.
+- [ ] **Live Cloud Deployment Execution**: Ready for repository push to trigger live Railway container volume deployment and/or Vercel edge deployment.
+
+---
+
+## Phase 9: Brand New Decoupled & Integrated React UI Application
+
+### 9.1 Objectives
+Build and deploy a brand new, highly responsive, state-of-the-art React conversational user interface for the AI Nutrition Assistant. In accordance with the dual-topology model, this phase produces:
+1. **Standalone React Client Application (`/client`)**: An independent Single-Page Application (SPA) powered by Vite, React 19, Tailwind CSS v4, and Lucide Icons, communicating via REST API with configurable base URL (`VITE_API_URL`).
+2. **Integrated Next.js UI Application (`/src`)**: A matching comprehensive overhaul of the fullstack App Router frontend (`src/app/page.tsx` and modular `src/components/`).
+
+### 9.2 Feature Set Matrix
+| Feature | Description | Component Location |
+| :--- | :--- | :--- |
+| **Multi-Session Drawer** | Sidebar listing active/previous conversations, create new session, delete session | `SessionSidebar.tsx` |
+| **Atomic Claims Inspector** | Interactive sidecar displaying parsed factual claims, `source: null` compliance, and M2 citation slots | `ClaimsInspector.tsx` |
+| **Preset Nutrition Chips** | Category-filtered query chips (Protein, Food Safety, Cooking, Fasting) | `PromptChips.tsx` |
+| **Server Health & Model Badge** | Live indicator for backend status and active model (`Groq: openai/gpt-oss-120b`) | `HeaderBar.tsx` |
+| **Rich Markdown & Copy** | GitHub-flavored markdown with code styling, tables, lists, and one-click copy button | `MessageItem.tsx` |
+| **Theme Switcher** | Light and Dark mode toggle with persistent local storage preference | `ThemeToggle.tsx` |
+
+### 9.3 Backend Server Enhancements
+To support decoupled client applications:
+1. **Health Check Endpoint (`GET /api/health`)**: Returns server uptime, active model configuration, and database connectivity.
+2. **Session Listing Endpoint (`GET /api/sessions`)**: Returns recent chat sessions for the multi-session drawer.
+3. **CORS Headers**: Allows cross-origin requests from the standalone React client (`http://localhost:5173` or deployed frontend domain).
+
+### 9.4 Step-by-Step Execution Tasks
+1. **Task 1: Backend Server Endpoints**:
+   - Implement `src/app/api/health/route.ts` and `src/app/api/sessions/route.ts`.
+   - Add CORS headers in Next.js route handlers.
+2. **Task 2: Standalone React Application Scaffolding (`/client`)**:
+   - Create `client/package.json` with React 19, Vite, Tailwind CSS, Lucide React, and Markdown libraries.
+   - Configure `client/vite.config.ts` with local proxy to `http://localhost:3000`.
+   - Setup styling in `client/src/index.css`.
+3. **Task 3: Standalone React Components Implementation**:
+   - Build `HeaderBar`, `SessionSidebar`, `ChatBox`, `MessageList`, `MessageItem`, `ChatInput`, `PromptChips`, and `ClaimsInspector`.
+4. **Task 4: Integrated Next.js UI Revamp**:
+   - Update `src/app/page.tsx` and `src/components/` to match the brand new UI architecture and feature set.
+5. **Task 5: Verification & End-to-End Smoke Test**:
+   - Verify both applications connect to the server, stream/receive responses, extract claims, and store session history.
+
+### 9.5 Definition of Done (DoD)
+- Both standalone `/client` and integrated `/src` run smoothly and connect to the backend server.
+- All 6 core features (session drawer, claims inspector, chips, model badge, markdown/copy, theme switcher) are interactive and bug-free.
+- Unit tests, smoke tests, and production builds complete with zero errors.

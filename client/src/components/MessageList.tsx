@@ -1,22 +1,19 @@
-"use client";
-
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { ChatMessage, ClaimItem } from "../types";
 import { MessageItem } from "./MessageItem";
-import { ChatMessage, Claim } from "@/types/nutrition";
 import { Salad, ShieldCheck, Sparkles } from "lucide-react";
 
 interface MessageListProps {
   messages: ChatMessage[];
   isLoading: boolean;
-  onInspectClaims?: (claims: Claim[]) => void;
-  onSelectPrompt?: (prompt: string) => void;
+  onInspectClaims?: (claims: ClaimItem[]) => void;
+  onSelectPrompt?: (text: string) => void;
 }
 
 export function MessageList({
   messages,
   isLoading,
-  onInspectClaims,
-  onSelectPrompt
+  onInspectClaims
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -77,13 +74,7 @@ export function MessageList({
   return (
     <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
       {messages.map((msg) => (
-        <MessageItem
-          key={msg.id}
-          role={msg.role}
-          content={msg.content}
-          claims={msg.claims}
-          onInspectClaims={onInspectClaims}
-        />
+        <MessageItem key={msg.id} message={msg} onInspectClaims={onInspectClaims} />
       ))}
 
       {isLoading && (

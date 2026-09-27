@@ -4,15 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/**/*.test.*"
+    "test": "tsx --test tests/**/*.test.*",
+    "benchmark": "tsx scripts/run-benchmark.mjs",
+    "smoke-test": "tsx scripts/smoke-test.mjs",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
     "@prisma/client": "^6.19.3",
     "clsx": "^2.1.1",
+    "groq-sdk": "^1.6.0",
     "lucide-react": "^1.47.0",
     "next": "16.3.6",
     "prisma": "^6.19.3",
