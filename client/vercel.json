@@ -6,6 +6,26 @@
     {
       "source": "/(.*)",
       "destination": "/index.html"
+    },
+    {
+      "source": "/api/meta",
+      "destination": "https://nutrition-chatbot-production.up.railway.app//api/v1/metadata"
+    },
+    {
+      "source": "/api/recommend",
+      "destination": "https://nutrition-chatbot-production.up.railway.app//api/v1/recommendations"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://nutrition-chatbot-production.up.railway.app//api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://nutrition-chatbot-production.up.railway.app//health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
