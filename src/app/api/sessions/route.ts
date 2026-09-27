@@ -24,10 +24,10 @@ export async function GET() {
 
     return NextResponse.json({ sessions: formatted }, { headers: corsHeaders });
   } catch (error: any) {
-    console.error("GET /api/sessions error:", error);
+    console.warn("GET /api/sessions DB unavailable:", error?.message);
     return NextResponse.json(
-      { error: "Failed to list sessions", details: error.message },
-      { status: 500, headers: corsHeaders }
+      { sessions: [], warning: "Database unavailable" },
+      { headers: corsHeaders }
     );
   }
 }

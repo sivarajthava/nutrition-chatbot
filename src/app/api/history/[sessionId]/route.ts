@@ -24,8 +24,13 @@ export async function GET(
       );
     }
 
-    const messages = await getSessionHistory(sessionId);
-    return NextResponse.json({ sessionId, messages }, { status: 200, headers: corsHeaders });
+    try {
+      const messages = await getSessionHistory(sessionId);
+      return NextResponse.json({ sessionId, messages }, { status: 200, headers: corsHeaders });
+    } catch (dbErr: any) {
+      console.warn(`GET /api/history/${sessionId} DB unavailable:`, dbErr?.message);
+      return NextResponse.json({ sessionId, messages: [] }, { status: 200, headers: corsHeaders });
+    }
   } catch (error: any) {
     console.error("API /api/history error:", error);
     return NextResponse.json(
