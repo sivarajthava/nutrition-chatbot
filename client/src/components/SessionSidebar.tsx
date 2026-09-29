@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { ChatSession } from "../types";
-import { Plus, MessageSquare, Trash2, X, Salad } from "lucide-react";
+import { Plus, MessageSquare, Trash2, X, Salad, Pencil, Check } from "lucide-react";
 
 interface SessionSidebarProps {
   sessions: ChatSession[];
@@ -7,6 +8,7 @@ interface SessionSidebarProps {
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
   onDeleteSession: (id: string) => void;
+  onRenameSession: (id: string, newTitle: string) => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -17,9 +19,34 @@ export function SessionSidebar({
   onSelectSession,
   onNewSession,
   onDeleteSession,
+  onRenameSession,
   isOpen,
   onClose
 }: SessionSidebarProps) {
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const startRenaming = (session: ChatSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingSessionId(session.id);
+    setRenameDraft(session.title || "Nutrition Query");
+    setConfirmDeleteId(null);
+  };
+
+  const handleSaveRename = (sessionId: string, e: React.MouseEvent | React.FormEvent) => {
+    e.stopPropagation();
+    if (renameDraft.trim()) {
+      onRenameSession(sessionId, renameDraft.trim());
+    }
+    setEditingSessionId(null);
+  };
+
+  const handleCancelRename = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingSessionId(null);
+  };
+
   return (
     <aside
       className={`fixed lg:static inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-200 ease-in-out ${
@@ -72,42 +99,129 @@ export function SessionSidebar({
         ) : (
           sessions.map((sess) => {
             const isActive = sess.id === activeSessionId;
+            const isEditing = editingSessionId === sess.id;
+            const isConfirmingDelete = confirmDeleteId === sess.id;
+
             return (
               <div
                 key={sess.id}
-                className={`group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all text-xs ${
+                className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all text-xs ${
                   isActive
                     ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/80 font-medium"
-                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-transparent"
                 }`}
-                onClick={() => onSelectSession(sess.id)}
+                onClick={() => {
+                  if (!isEditing && !isConfirmingDelete) {
+                    onSelectSession(sess.id);
+                  }
+                }}
               >
-                <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                  <MessageSquare
-                    className={`w-4 h-4 shrink-0 ${
-                      isActive ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
-                    }`}
-                  />
-                  <div className="truncate">
-                    <p className="truncate">{sess.title || "Nutrition Query"}</p>
-                    <p className="text-[10px] text-slate-400 truncate font-normal">
-                      {new Date(sess.updatedAt || sess.createdAt).toLocaleDateString()}
-                    </p>
+                {isEditing ? (
+                  <form
+                    onSubmit={(e) => handleSaveRename(sess.id, e)}
+                    className="flex items-center gap-1.5 flex-1 min-w-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="text"
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-950 border border-emerald-500 rounded-lg px-2 py-1 text-xs text-slate-900 dark:text-slate-100 focus:outline-none"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setEditingSessionId(null);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => handleSaveRename(sess.id, e)}
+                      className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 shrink-0"
+                      title="Save title"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelRename}
+                      className="p-1 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 shrink-0"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
+                ) : isConfirmingDelete ? (
+                  <div
+                    className="flex items-center justify-between gap-1 w-full bg-rose-50 dark:bg-rose-950/60 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-900"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-[11px] text-rose-700 dark:text-rose-300 font-semibold truncate">
+                      Delete chat?
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSession(sess.id);
+                          setConfirmDeleteId(null);
+                        }}
+                        className="px-1.5 py-0.5 bg-rose-600 text-white rounded text-[10px] font-bold hover:bg-rose-700"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(null);
+                        }}
+                        className="p-0.5 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 truncate flex-1 min-w-0 pr-1">
+                      <MessageSquare
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
+                        }`}
+                      />
+                      <div className="truncate">
+                        <p className="truncate">{sess.title || "Nutrition Query"}</p>
+                        <p className="text-[10px] text-slate-400 truncate font-normal">
+                          {new Date(sess.updatedAt || sess.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteSession(sess.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shrink-0"
-                  title="Delete session"
-                  aria-label="Delete session"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => startRenaming(sess, e)}
+                        className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                        title="Rename conversation"
+                        aria-label="Rename conversation"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(sess.id);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                        title="Delete conversation"
+                        aria-label="Delete conversation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })

@@ -11,6 +11,9 @@ interface ChatBoxProps {
   onInspectClaims: (claims: ClaimItem[]) => void;
   errorBanner: string | null;
   onDismissError: () => void;
+  onPinMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
 }
 
 export function ChatBox({
@@ -19,7 +22,10 @@ export function ChatBox({
   onSendMessage,
   onInspectClaims,
   errorBanner,
-  onDismissError
+  onDismissError,
+  onPinMessage,
+  onEditMessage,
+  onDeleteMessage
 }: ChatBoxProps) {
   return (
     <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden flex-1 min-w-0">
@@ -46,6 +52,9 @@ export function ChatBox({
         messages={messages}
         isLoading={isLoading}
         onInspectClaims={onInspectClaims}
+        onPinMessage={onPinMessage}
+        onEditMessage={onEditMessage}
+        onDeleteMessage={onDeleteMessage}
       />
 
       {/* Chat Input Container */}

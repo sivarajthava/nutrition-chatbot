@@ -4,6 +4,7 @@
   "/api/chat/route": "/api/chat",
   "/api/health/route": "/api/health",
   "/api/history/[sessionId]/route": "/api/history/[sessionId]",
+  "/api/messages/[messageId]/route": "/api/messages/[messageId]",
   "/api/sessions/route": "/api/sessions",
   "/favicon.ico/route": "/favicon.ico",
   "/page": "/"

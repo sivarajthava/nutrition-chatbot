@@ -10,6 +10,9 @@ export interface ChatMessage {
   content: string;
   claims?: ClaimItem[];
   createdAt: string;
+  updatedAt?: string;
+  isPinned?: boolean;
+  isEdited?: boolean;
 }
 
 export interface NutritionAssistantResponse {

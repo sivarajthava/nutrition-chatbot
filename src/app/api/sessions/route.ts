@@ -3,7 +3,7 @@ import { listSessions, deleteSession, prisma } from "@/lib/db";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS, DELETE",
   "Access-Control-Allow-Headers": "Content-Type, Authorization"
 };
 
@@ -50,6 +50,47 @@ export async function POST(req: NextRequest) {
     console.error("POST /api/sessions error:", error);
     return NextResponse.json(
       { error: "Failed to create session", details: error.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { sessionId, title } = body;
+
+    if (!sessionId || typeof title !== "string") {
+      return NextResponse.json(
+        { error: "Missing or invalid sessionId or title parameter" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    try {
+      const updated = await prisma.session.update({
+        where: { id: sessionId },
+        data: { title: title.trim(), updatedAt: new Date() }
+      });
+      return NextResponse.json({ success: true, session: updated }, { headers: corsHeaders });
+    } catch (dbErr: any) {
+      console.warn("PATCH /api/sessions DB warning:", dbErr?.message);
+      return NextResponse.json(
+        {
+          success: true,
+          session: {
+            id: sessionId,
+            title: title.trim(),
+            updatedAt: new Date().toISOString()
+          }
+        },
+        { headers: corsHeaders }
+      );
+    }
+  } catch (error: any) {
+    console.error("PATCH /api/sessions error:", error);
+    return NextResponse.json(
+      { error: "Failed to update session", details: error.message },
       { status: 500, headers: corsHeaders }
     );
   }

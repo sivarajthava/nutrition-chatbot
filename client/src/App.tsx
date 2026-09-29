@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ChatMessage, ChatSession, ClaimItem, NutritionAssistantResponse, ServerHealth } from "./types";
 import { HeaderBar } from "./components/HeaderBar";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -36,6 +36,12 @@ export function App() {
   const [serverHealth, setServerHealth] = useState<ServerHealth>({
     status: "checking"
   });
+
+  // Determine active session title
+  const activeSessionTitle = useMemo(() => {
+    const found = sessions.find((s) => s.id === sessionId);
+    return found?.title || "Nutrition Chat";
+  }, [sessions, sessionId]);
 
   // Check server health on mount and periodically
   useEffect(() => {
@@ -100,6 +106,15 @@ export function App() {
         if (res.ok && contentType.includes("application/json")) {
           const data = await res.json();
           if (Array.isArray(data.messages) && isMounted) {
+            // Retrieve pinned message IDs for this session
+            const pinnedSet = new Set<string>();
+            try {
+              const storedPins = localStorage.getItem(`pinned_${sessionId}`);
+              if (storedPins) {
+                JSON.parse(storedPins).forEach((id: string) => pinnedSet.add(id));
+              }
+            } catch {}
+
             const parsed: ChatMessage[] = data.messages.map((m: any) => ({
               id: m.id,
               sessionId: m.sessionId,
@@ -109,7 +124,8 @@ export function App() {
                 claim_text: c.claimText,
                 source: c.source ?? null
               })),
-              createdAt: m.createdAt
+              createdAt: m.createdAt,
+              isPinned: pinnedSet.has(m.id)
             }));
             setMessages(parsed);
 
@@ -202,16 +218,92 @@ export function App() {
     setIsSidebarOpen(false);
   };
 
+  // Rename a session
+  const handleRenameSession = async (idToRename: string, newTitle: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === idToRename ? { ...s, title: newTitle } : s))
+    );
+
+    try {
+      await fetch(getApiUrl("/api/sessions"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: idToRename, title: newTitle })
+      });
+    } catch (err) {
+      console.warn("Failed to persist session rename to server:", err);
+    }
+  };
+
   // Delete a session
   const handleDeleteSession = async (idToDelete: string) => {
     try {
       await fetch(getApiUrl(`/api/sessions?sessionId=${idToDelete}`), { method: "DELETE" });
       setSessions((prev) => prev.filter((s) => s.id !== idToDelete));
+      try {
+        localStorage.removeItem(`pinned_${idToDelete}`);
+      } catch {}
       if (sessionId === idToDelete) {
         handleNewSession();
       }
     } catch (err) {
       console.error("Failed to delete session:", err);
+    }
+  };
+
+  // Pin or Unpin a message
+  const handlePinMessage = (messageId: string) => {
+    setMessages((prev) => {
+      const updated = prev.map((m) =>
+        m.id === messageId ? { ...m, isPinned: !m.isPinned } : m
+      );
+
+      // Persist to localStorage
+      try {
+        const pinnedIds = updated.filter((m) => m.isPinned).map((m) => m.id);
+        localStorage.setItem(`pinned_${sessionId}`, JSON.stringify(pinnedIds));
+      } catch (err) {
+        console.warn("Could not save pinned messages to localStorage:", err);
+      }
+
+      return updated;
+    });
+  };
+
+  // Edit a message
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, content: newContent, isEdited: true } : m
+      )
+    );
+
+    try {
+      await fetch(getApiUrl(`/api/messages/${messageId}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newContent })
+      });
+    } catch (err) {
+      console.warn("Failed to sync edited message with server:", err);
+    }
+  };
+
+  // Delete a message
+  const handleDeleteMessage = async (messageId: string) => {
+    setMessages((prev) => {
+      const updated = prev.filter((m) => m.id !== messageId);
+      try {
+        const pinnedIds = updated.filter((m) => m.isPinned).map((m) => m.id);
+        localStorage.setItem(`pinned_${sessionId}`, JSON.stringify(pinnedIds));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      await fetch(getApiUrl(`/api/messages/${messageId}`), { method: "DELETE" });
+    } catch (err) {
+      console.warn("Failed to delete message on server:", err);
     }
   };
 
@@ -233,6 +325,7 @@ export function App() {
         }}
         onNewSession={handleNewSession}
         onDeleteSession={handleDeleteSession}
+        onRenameSession={handleRenameSession}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -242,8 +335,10 @@ export function App() {
         {/* Top Header */}
         <HeaderBar
           serverHealth={serverHealth}
+          activeSessionTitle={activeSessionTitle}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           onToggleClaims={() => setIsClaimsOpen((prev) => !prev)}
+          onRenameSession={(newTitle) => handleRenameSession(sessionId, newTitle)}
           claimsCount={activeClaims.length}
         />
 
@@ -259,6 +354,9 @@ export function App() {
               onInspectClaims={handleInspectClaims}
               errorBanner={errorBanner}
               onDismissError={() => setErrorBanner(null)}
+              onPinMessage={handlePinMessage}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
             />
           </main>
 
@@ -281,4 +379,5 @@ export function App() {
     </div>
   );
 }
+
 export default App;

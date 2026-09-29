@@ -29,6 +29,14 @@
         "nxtPsessionId": "nxtPsessionId"
       },
       "namedRegex": "^/api/history/(?<nxtPsessionId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/messages/[messageId]",
+      "regex": "^/api/messages/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPmessageId": "nxtPmessageId"
+      },
+      "namedRegex": "^/api/messages/(?<nxtPmessageId>[^/]+?)(?:/)?$"
     }
   ],
   "staticRoutes": [

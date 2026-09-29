@@ -88,10 +88,40 @@ export async function listSessions() {
   });
 }
 
+export async function updateSessionTitle(sessionId: string, title: string) {
+  return prisma.session.update({
+    where: { id: sessionId },
+    data: { title, updatedAt: new Date() }
+  });
+}
+
 export async function deleteSession(sessionId: string) {
   return prisma.session.delete({
     where: { id: sessionId }
   });
+}
+
+export async function deleteMessageFromDB(messageId: string) {
+  try {
+    return await prisma.message.delete({
+      where: { id: messageId }
+    });
+  } catch (err: any) {
+    console.warn("deleteMessageFromDB warning:", err?.message || err);
+    return null;
+  }
+}
+
+export async function updateMessageInDB(messageId: string, content: string) {
+  try {
+    return await prisma.message.update({
+      where: { id: messageId },
+      data: { content }
+    });
+  } catch (err: any) {
+    console.warn("updateMessageInDB warning:", err?.message || err);
+    return null;
+  }
 }
 
 export interface FailureLogEntry {
