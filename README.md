@@ -122,44 +122,6 @@ graph TD
 
 ---
 
-### End-to-End Sequence Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User
-    participant UI as React Frontend (Next.js / Vite SPA)
-    participant API as Serverless Route (/api/chat)
-    participant Guard as Deterministic Pre-LLM Guardrail
-    participant DB as Prisma SQLite / Postgres DB
-    participant LLM as Groq LPU (openai/gpt-oss-120b)
-
-    User->>UI: Enters nutritional query or clicks prompt chip
-    UI->>UI: Optimistically appends user message to feed
-    UI->>API: POST /api/chat { sessionId, message }
-    
-    API->>Guard: evaluateScope(message)
-    
-    alt Case A: Out-of-Scope Trigger (Calorie Targets, Weight Prescriptions, Disease Therapy)
-        Guard-->>API: MATCH_PROHIBITED { reason, refusalText }
-        API->>DB: Persist User Message & Deterministic Refusal Record
-        API-->>UI: HTTP 200 OK Refusal JSON (answer prose + claim with source: null)
-        UI->>UI: Render professional refusal banner; Sources panel remains in M1 baseline state
-    else Case B: Approved In-Scope Food & Nutrition Query
-        API->>DB: Fetch rolling conversation history (last 6 turns)
-        DB-->>API: Return recent session messages
-        API->>API: Assemble system prompt + history + JSON schema instructions
-        API->>LLM: chat.completions.create({ model: "openai/gpt-oss-120b", response_format: { type: "json_object" } })
-        LLM-->>API: Raw JSON string { answer: "...", claims: [...] }
-        API->>API: Strip Markdown fences & enforce all claim sources = null
-        API->>API: Zod validate against NutritionAssistantResponseSchema
-        API->>DB: Persist User Message, Assistant Message & Decomposed Claims
-        API-->>UI: HTTP 200 OK NutritionAssistantResponse JSON
-        UI->>UI: Render Markdown formatted answer in stream
-        UI->>UI: Populate Claims Inspector / Sources Sidecar with extracted claims
-    end
-```
-
 ---
 
 ### Dual-Topology Deployment Model
