@@ -561,7 +561,7 @@ flowchart LR
    DATABASE_URL=file:/data/nutrition.db
    NODE_ENV=production
    ```
-5. Railway automatically utilizes [`railway.json`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/railway.json):
+5. Railway automatically utilizes [`railway.json`](railway.json):
    - **Build Command**: `npx prisma generate && npx prisma db push && npm run build`
    - **Start Command**: `npm run start`
    - **Healthcheck Path**: `/api/health`
@@ -594,7 +594,7 @@ Deploy the Next.js application to Vercel's global edge network with an external 
 Deploy the standalone Vite React SPA (`/client`) on Vercel and connect it to the Railway API server.
 
 1. In Vercel, import the repository and set **Root Directory** to `client`.
-2. Vercel detects [`client/vercel.json`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/client/vercel.json) with SPA rewrites.
+2. Vercel detects [`client/vercel.json`](client/vercel.json) with SPA rewrites.
 3. Configure Environment Variable:
    ```env
    VITE_API_URL=https://nutrition-chatbot.up.railway.app
@@ -605,7 +605,7 @@ Deploy the standalone Vite React SPA (`/client`) on Vercel and connect it to the
 
 ### Docker Deployment
 
-A production-ready multi-stage [`Dockerfile`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/Dockerfile) is provided in the repository root:
+A production-ready multi-stage [`Dockerfile`](Dockerfile) is provided in the repository root:
 
 ```bash
 # Build the Docker image

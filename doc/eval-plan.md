@@ -311,3 +311,43 @@ graph LR
 | **Numerical Drift Rate** | High (Baseline recorded) | **0% Drift** (Fixed to verified database values) | Complete determinism |
 | **Phantom Citations** | Present in baseline | **0 Phantom Citations** | Zero citation hallucination |
 | **Unbacked Assertions** | High | **< 5%** (Only general linguistic connectors) | Full claim grounding |
+
+---
+
+## 9. Token Usage Telemetry & Accounting (`token_usage.txt`)
+
+As specified in [`doc/token_usage.txt`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/doc/token_usage.txt) and [`token_usage.txt`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/token_usage.txt), token usage is systematically monitored across all evaluation questions and production interactions.
+
+### 9.1 Benchmark Question Token Consumption Profile (30 Evaluation Runs)
+
+| Question ID | Category | Benchmark Prompt Summary | Avg Input Tokens *(System + Query)* | Avg Output Tokens *(JSON + Claims)* | Single Run Total | 3-Run Benchmark Total |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: |
+| **Q1** | Nutrient Requirements | 70kg Vegetarian Protein Needs | ~238 tok | ~265 tok | **~503 tok** | ~1,509 tok |
+| **Q2** | Nutrient Requirements | Vitamin B12 & Spirulina Efficacy | ~242 tok | ~290 tok | **~532 tok** | ~1,596 tok |
+| **Q3** | Nutrient Requirements | Elemental Iron in Pregnancy | ~240 tok | ~245 tok | **~485 tok** | ~1,455 tok |
+| **Q4** | Food Safety & Storage | Cooked Rice & *B. cereus* Risk | ~244 tok | ~310 tok | **~554 tok** | ~1,662 tok |
+| **Q5** | Food Safety & Storage | Counter-Thawed Chicken at 165°F | ~249 tok | ~280 tok | **~529 tok** | ~1,587 tok |
+| **Q6** | Food Safety & Storage | Vacuum-Packed Smoked Salmon Storage | ~239 tok | ~260 tok | **~499 tok** | ~1,497 tok |
+| **Q7** | Cooking Methods | Boiling vs Steaming Broccoli Retention | ~241 tok | ~340 tok | **~581 tok** | ~1,743 tok |
+| **Q8** | Cooking Methods | EVOO Smoke Point & Polar Compounds | ~247 tok | ~375 tok | **~622 tok** | ~1,866 tok |
+| **Q9** | Unsettled Science | Seed Oils (Linoleic Acid) & Inflammation | ~243 tok | ~390 tok | **~633 tok** | ~1,899 tok |
+| **Q10** | Unsettled Science | Intermittent Fasting vs Caloric Restriction | ~246 tok | ~385 tok | **~631 tok** | ~1,893 tok |
+| **Totals** | **Aggregate (30 Runs)** | **10 Questions × 3 Runs** | **~7,290 tok** | **~9,420 tok** | **~557 tok (avg)** | **~16,710 tok** |
+
+### 9.2 Guardrail Token Conservation Policy
+Deterministic code-level guardrail evaluation in [`src/lib/guardrails.ts`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/src/lib/guardrails.ts) runs strictly prior to upstream API dispatching:
+- **Calorie Targets & Deficits**: 0 LLM tokens (Immediate HTTP 200 code-level refusal)
+- **Target Body Weight Prescriptions**: 0 LLM tokens
+- **Clinical Pathology & Disease Treatment**: 0 LLM tokens
+- **Disordered Eating & Starvation Triggers**: 0 LLM tokens
+- **Adversarial Roleplay Jailbreaks**: 0 LLM tokens
+
+**Token Savings**: 100% of LLM inference cost (~550 tokens per prevented query) is saved for all out-of-scope interactions.
+
+### 9.3 Rolling Context Window Token Management
+To prevent exponential token accumulation in multi-turn conversations, the context history is bounded to a **rolling 6-turn window**:
+- **Turn 1**: ~235 input tokens (210 system + 25 user)
+- **Turn 2**: ~555 input tokens (210 system + 320 history + 25 user)
+- **Turn 4**: ~1,195 input tokens (210 system + 960 history + 25 user)
+- **Turn 6+**: Bounded at **~1,835 input tokens max** (older turns are pruned).
+
