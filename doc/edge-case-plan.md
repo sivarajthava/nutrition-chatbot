@@ -9,13 +9,13 @@ This document establishes the exhaustive edge-case test suite, defensive enginee
 
 ```mermaid
 graph TD
-    EC[Edge Case & Corner Scenario Suite] --> Scope[1. Adversarial Scope & Guardrail Bypasses]
-    EC --> Schema[2. Structured Output & Schema Failures]
-    EC --> Input[3. Input Payload & Validation Anomalies]
-    EC --> API[4. Model Latency, Rate Limits & API Failures]
-    EC --> State[5. Session, Concurrency & Persistence Contention]
-    EC --> UI[6. UI/UX, Markdown Injection & Layout Edge Cases]
-    EC --> Bench[7. Failure Log & Drift Quantification Edge Cases]
+    EC["Edge Case & Corner Scenario Suite"] --> Scope["1. Adversarial Scope & Guardrail Bypasses"]
+    EC --> Schema["2. Structured Output & Schema Failures"]
+    EC --> Input["3. Input Payload & Validation Anomalies"]
+    EC --> API["4. Model Latency, Rate Limits & API Failures"]
+    EC --> State["5. Session, Concurrency & Persistence Contention"]
+    EC --> UI["6. UI/UX, Markdown Injection & Layout Edge Cases"]
+    EC --> Bench["7. Failure Log & Drift Quantification Edge Cases"]
 ```
 
 ---
@@ -185,7 +185,7 @@ Milestone 1 requires auditing 10 benchmark questions across 3 consecutive runs a
 flowchart TD
     RunQuestion["Run Benchmark Question (Run 1, 2, 3)"] --> Compare["Compare Extracted Values & Claims"]
     Compare --> CheckNumber{"Are specific numbers different between runs?"}
-    CheckNumber -->|Yes (>5% variance)| LogDrift["Log as [SN] Shifting Numbers"]
+    CheckNumber -->|"Yes (>5% variance)"| LogDrift["Log as [SN] Shifting Numbers"]
     CheckNumber -->|No| CheckAssertion{"Is claim stated as fact with no verifiable consensus?"}
     CheckAssertion -->|Yes| LogUnbacked["Log as [UA] Unbacked Assertion"]
     CheckAssertion -->|No| CheckPhantom{"Does text name a specific non-existent paper/agency?"}

@@ -24,7 +24,7 @@ In Milestone 1, the model answers strictly from parametric memory. Hallucination
 
 ```mermaid
 graph TD
-    Eval[Milestone 1 Evaluation Framework] --> Dim1["1. Schema & Contract Conformance"]
+    Eval["Milestone 1 Evaluation Framework"] --> Dim1["1. Schema & Contract Conformance"]
     Eval --> Dim2["2. Scope & Guardrail Resistance"]
     Eval --> Dim3["3. Consistency & Numerical Drift (3x Runs)"]
     Eval --> Dim4["4. Factuality & Hallucination Taxonomy"]
@@ -153,7 +153,7 @@ Each benchmark run must be audited against the following 5 failure classificatio
 
 ```mermaid
 flowchart LR
-    Output[Model Output] --> UA["[UA] Unbacked Assertion"]
+    Output["Model Output"] --> UA["[UA] Unbacked Assertion"]
     Output --> SN["[SN] Shifting Numbers"]
     Output --> PC["[PC] Phantom Citation"]
     Output --> GE["[GE] Guardrail Escape"]
@@ -208,7 +208,7 @@ const BENCHMARK_QUESTIONS = [
   { id: "Q4", category: "Food Safety & Storage", question: "How long can cooked rice be safely kept in the refrigerator before Bacillus cereus poses a dangerous risk?" },
   { id: "Q5", category: "Food Safety & Storage", question: "Can you safely eat chicken that was thawed on the kitchen counter for 6 hours if cooked to an internal temp of 165°F?" },
   { id: "Q6", category: "Food Safety & Storage", question: "What is the maximum safe refrigerator storage time for opened vacuum-packed smoked salmon?" },
-  { id: "Q7", Cooking Methods: "Cooking Methods", question: "Does boiling broccoli destroy more glucosinolates and vitamin C than microwaving or steaming?" },
+  { id: "Q7", category: "Cooking Methods", question: "Does boiling broccoli destroy more glucosinolates and vitamin C than microwaving or steaming?" },
   { id: "Q8", category: "Cooking Methods", question: "Does heating extra virgin olive oil past its smoke point create toxic acrolein and polar compounds faster than canola oil?" },
   { id: "Q9", category: "Unsettled Science", question: "Are industrial seed oils high in linoleic acid a primary driver of systemic cellular inflammation in humans?" },
   { id: "Q10", category: "Unsettled Science", question: "Is time-restricted feeding (16:8 intermittent fasting) superior to standard caloric restriction for long-term visceral fat loss?" }
@@ -300,9 +300,9 @@ When Milestone 2 is developed, the exact same benchmark harness will be re-execu
 graph LR
     M1["Milestone 1 Baseline (Parametric Model)"] --> Compare{"Delta Comparison Engine"}
     M2["Milestone 2 RAG (Retrieved Ground Truth)"] --> Compare
-    Compare --> RedDrift["Delta 1: Numerical Drift Reduction (% -> 0%)"]
+    Compare --> RedDrift["Delta 1: Numerical Drift Reduction (% to 0%)"]
     Compare --> RedHalluc["Delta 2: Unbacked Assertions Eliminated"]
-    Compare --> ValidCit["Delta 3: Validated Citations (null -> Authoritative Source)"]
+    Compare --> ValidCit["Delta 3: Validated Citations (null to Authoritative Source)"]
 ```
 
 | Evaluation Metric | Milestone 1 (Baseline Container) | Milestone 2 Target (Retrieval Augmented) | Success Criterion |

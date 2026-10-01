@@ -47,7 +47,7 @@ This log documents the ground-truth baseline of **30 test runs** across the **10
 ## 3. Aggregate Failure Mode Distribution
 
 ```mermaid
-pie title Milestone 1 Baseline Failure Mode Distribution (44 Total Failures)
+pie title "Milestone 1 Baseline Failure Mode Distribution (44 Total Failures)"
     "Unbacked Assertions [UA]" : 21
     "Shifting Numbers [SN]" : 11
     "Phantom Citations [PC]" : 7

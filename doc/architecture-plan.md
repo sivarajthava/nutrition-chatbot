@@ -62,7 +62,7 @@ graph TD
     end
     
     subgraph Storage ["Persistence Layer"]
-        DBWriter --> DB[(SQLite / PostgreSQL DB)]
+        DBWriter --> DB[("SQLite / PostgreSQL DB")]
     end
     
     DBWriter -->|JSON Response| NextServer
@@ -77,49 +77,33 @@ graph TD
 sequenceDiagram
     autonumber
     actor User as User
-    participant UI as Chat Frontend (Next.js)
+    participant UI as Chat Frontend (Next.js / Vite SPA)
     participant API as /api/chat Endpoint
-    participant Guard as Code Guardrail Interceptor
+    participant Guard as Deterministic Scope Guardrail
     participant DB as SQLite / PostgreSQL DB
-    participant Gemini as Google Gemini API
+    participant LLM as Google Gemini / Groq LLM
 
     User->>UI: Types question & clicks Send
     UI->>UI: Appends optimistic user message to thread
     UI->>API: POST /api/chat { sessionId, message }
     
-    critical Step 1: Deterministic Guardrail Check
-        API->>Guard: evaluateScope(message)
-        alt Involves Calorie Targets / Body Weight / Medical Advice
-            Guard-->>API: REJECT { reason, refusalText }
-            API->>DB: Persist User Message & Refusal Record
-            API-->>UI: Return 200 OK with deterministic refusal response
-            UI->>UI: Render refusal & professional referral; Sources panel stays empty
-        end
+    API->>Guard: evaluateScope(message)
+    alt Out-of-Scope (Calorie Targets / Body Weight / Medical Advice)
+        Guard-->>API: REJECT { reason, refusalText }
+        API->>DB: Persist User Message & Refusal Record
+        API-->>UI: Return 200 OK Refusal Response (claim source: null)
+        UI->>UI: Render refusal banner; Sources panel remains in M1 baseline state
+    else Approved In-Scope Food & Nutrition Query
+        API->>DB: Fetch recent conversation history (last 6 turns)
+        API->>API: Construct system instructions + history + schema
+        API->>LLM: generateContent({ model: "gemini-2.5-flash", contents, schema })
+        LLM-->>API: Raw JSON string conforming to schema
+        API->>API: Zod schema validation & sanitize claim sources = null
+        API->>DB: Persist Assistant Message + Atomic Claims
+        API-->>UI: Return 200 OK NutritionAssistantResponse JSON
+        UI->>UI: Render answer markdown in message stream
+        UI->>UI: Populate Sources panel with extracted claims (source: null)
     end
-    
-    critical Step 2: Context Retrieval & Prompt Preparation
-        API->>DB: Fetch recent conversation history (last N turns)
-        API->>API: Construct system instructions + user prompt + schema
-    end
-    
-    critical Step 3: LLM Inference with Structured Output
-        API->>Gemini: generateContent({ model: "gemini-2.5-flash", contents, config: { response_schema, response_mime_type: "application/json" } })
-        Gemini-->>API: Raw JSON string conforming to schema
-    end
-    
-    critical Step 4: Strict Schema Validation & Sanitization
-        API->>API: Zod.parse(rawJSON)
-        alt Parsing Fails or Schema Corrupted
-            API-->>UI: Return 500 Internal Error ("Invalid response structure from model")
-        else Schema Valid
-            API->>API: Assert all claims.source === null
-            API->>DB: Persist Assistant Message + Atomic Claims
-            API-->>UI: Return 200 OK NutritionAssistantResponse JSON
-        end
-    end
-    
-    UI->>UI: Render answer markdown in message stream
-    UI->>UI: Sources panel updates state (Displays: "0 Sources - Parametric Memory Run")
 ```
 
 ---
@@ -313,7 +297,7 @@ erDiagram
     MESSAGES {
         string id PK
         string session_id FK
-        string role "user | assistant | system"
+        string role "user, assistant, system"
         string content
         json raw_response
         datetime created_at
@@ -340,7 +324,7 @@ erDiagram
         int question_id
         string category
         string question_text
-        string failure_type "unbacked_claim | shifting_number | phantom_source | guardrail_escape | useless_hedge"
+        string failure_type "unbacked_claim, shifting_number, phantom_source, guardrail_escape, useless_hedge"
         text details
         datetime created_at
     }
@@ -404,17 +388,17 @@ gantt
     title Implementation Phasing Roadmap
     dateFormat  YYYY-MM-DD
     section Foundation & Setup
-    Project Scaffolding (Next.js, Tailwind, TS)       :done,    p1, 2026-09-24, 1d
+    Project Scaffolding Next.js Tailwind TS           :done,    p1, 2026-09-24, 1d
     Environment & Gemini SDK Configuration           :active,  p2, 2026-09-25, 1d
     section Core Backend & Guardrails
     Zod Response Schemas & Types Definition          :         p3, 2026-09-25, 1d
     Deterministic Scope Guardrails Interceptor       :         p4, 2026-09-26, 1d
     Gemini Structured Output Integration Route       :         p5, 2026-09-26, 1d
     section Frontend Development
-    Dual-Panel Layout (Chat + Sources Sidecar)      :         p6, 2026-09-27, 2d
-    Message Stream, Markdown, & Claim Badges         :         p7, 2026-09-28, 1d
+    Dual-Panel Layout Chat and Sources Sidecar       :         p6, 2026-09-27, 2d
+    Message Stream Markdown and Claim Badges         :         p7, 2026-09-28, 1d
     section Evaluation & Verification
-    3x Consistency Testing & Benchmark Execution     :         p8, 2026-09-29, 1d
+    Consistency Testing & Benchmark Execution        :         p8, 2026-09-29, 1d
     Adversarial Scope Testing & Failure Logging      :         p9, 2026-09-29, 1d
     section Deployment & Milestone 2 Readiness
     Vercel Public Production Deployment              :         p10, 2026-09-30, 1d
@@ -465,7 +449,7 @@ flowchart TD
         API_Health["GET /api/health (Server & Model Status)"]
     end
 
-    ClientApp <-->|REST API / CORS| ServerBackend
+    ClientApp <-->|"REST API / CORS"| ServerBackend
 ```
 
 ### 12.2 Component Hierarchy & Responsibilities

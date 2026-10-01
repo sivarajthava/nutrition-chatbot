@@ -468,19 +468,19 @@ gantt
     title AI Nutrition Assistant Implementation Roadmap
     dateFormat  YYYY-MM-DD
     section Phase 1 & 2
-    Scaffolding, TypeScript, Tailwind, Environment  :done, p1, 2026-09-24, 1d
-    Data Contracts, Zod Schema, Null Enforcement   :done, p2, 2026-09-25, 1d
+    Scaffolding TypeScript Tailwind and Environment  :done, p1, 2026-09-24, 1d
+    Data Contracts Zod Schema Null Enforcement       :done, p2, 2026-09-25, 1d
     section Phase 3 & 4
-    Groq & Gemini LLM Integration & Orchestration   :done, p3, 2026-09-25, 2d
-    Deterministic Pre-LLM Scope Guardrails          :done, p4, 2026-09-26, 1d
+    Groq and Gemini LLM Integration Engine           :done, p3, 2026-09-25, 2d
+    Deterministic Pre-LLM Scope Guardrails           :done, p4, 2026-09-26, 1d
     section Phase 5 & 6
-    Prisma SQLite/Postgres Persistence Layer        :done, p5, 2026-09-27, 1d
-    Dual-Panel UI & Sources Sidecar                 :done, p6, 2026-09-27, 2d
+    Prisma SQLite and Postgres Persistence Layer     :done, p5, 2026-09-27, 1d
+    Dual-Panel UI and Sources Sidecar                :done, p6, 2026-09-27, 2d
     section Phase 7 & 8
-    Adversarial Battery, Benchmark & Failure Log    :done, p7, 2026-09-28, 2d
-    Railway & Vercel Production Deployment Plan     :done, p8, 2026-09-29, 2d
+    Adversarial Battery Benchmark and Failure Log    :done, p7, 2026-09-28, 2d
+    Railway and Vercel Production Deployment Plan    :done, p8, 2026-09-29, 2d
     section Phase 9
-    Decoupled React 19 Client SPA (/client)         :done, p9, 2026-09-29, 2d
+    Decoupled React 19 Client SPA                    :done, p9, 2026-09-29, 2d
 ```
 
 ### Detailed Phase Breakdown:

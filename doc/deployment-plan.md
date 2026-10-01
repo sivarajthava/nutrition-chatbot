@@ -35,7 +35,7 @@ flowchart TD
     subgraph Strategy3["Topology 3: Decoupled Hybrid (Vercel Client + Railway Backend)"]
         HY_Vercel["Vercel: Standalone React Client (/client Vite SPA)"]
         HY_Railway["Railway: API Server + Persistent SQLite (/data)"]
-        HY_Vercel <-->|CORS / REST (VITE_API_URL)| HY_Railway
+        HY_Vercel <-->|"CORS / REST (VITE_API_URL)"| HY_Railway
         User3["End Users"] <--> HY_Vercel
     end
 
