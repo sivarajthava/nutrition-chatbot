@@ -260,9 +260,63 @@ erDiagram
 
 ## 🔌 API & Interface Specifications
 
-### 1. `POST /api/chat`
-Submit a message within a conversation session and receive a validated structured response.
+### API Topology Overview
 
+```mermaid
+flowchart LR
+    subgraph ClientLayer["1. Client Layer (React UI / Vite SPA)"]
+        UI["Chat Container, Session Drawer, Telemetry Pill"]
+    end
+
+    subgraph ServerLayer["2. Backend Server (Next.js Route Handlers)"]
+        API_Chat["POST /api/chat"]
+        API_Health["GET /api/health"]
+        API_Sessions["GET/POST/DELETE /api/sessions"]
+        API_History["GET /api/history/:sessionId"]
+        API_Messages["DELETE/PATCH /api/messages/:messageId"]
+    end
+
+    subgraph ExternalLayer["3. External LLMs & Persistence"]
+        Groq["Groq Cloud LPU (openai/gpt-oss-120b)"]
+        Gemini["Google Gemini (gemini-2.5-flash)"]
+        DB[("Prisma SQLite / PostgreSQL DB")]
+    end
+
+    UI -->|POST /api/chat| API_Chat
+    UI -->|GET /api/health| API_Health
+    UI -->|GET, POST, DELETE /api/sessions| API_Sessions
+    UI -->|GET /api/history/:id| API_History
+    UI -->|DELETE, PATCH /api/messages/:id| API_Messages
+
+    API_Chat -->|HTTPS / JSON Mode| Groq
+    API_Chat -.->|Fallback HTTPS| Gemini
+    API_Chat -->|Prisma Client| DB
+    API_Sessions -->|Prisma Client| DB
+    API_History -->|Prisma Client| DB
+    API_Messages -->|Prisma Client| DB
+```
+
+---
+
+### 1. Client-to-Server API Endpoints (Frontend $\rightarrow$ Next.js Backend)
+
+| HTTP Method | Route Endpoint | Purpose / UI Trigger | Request Payload | Response Schema |
+| :--- | :--- | :--- | :--- | :--- |
+| **`POST`** | `/api/chat` | User submits a nutritional query | `{"sessionId": string, "message": string}` | `{"answer": string, "claims": Array<{claim_text: string, source: null}>}` |
+| **`GET`** | `/api/health` | Live telemetry pill & model health indicator | *None* | `{"status": "online", "provider": "Groq", "model": string, "guardrails": "active"}` |
+| **`GET`** | `/api/sessions` | Sidebar drawer loads past conversation sessions | *None* | `{"sessions": Array<{id: string, title: string, createdAt: string, messageCount: number}>}` |
+| **`POST`** | `/api/sessions` | User clicks "+ New Chat" | `{"title"?: string}` | `{"session": {id: string, title: string, createdAt: string}}` |
+| **`DELETE`** | `/api/sessions` | User clicks "Clear All Conversations" | *None* | `{"success": true, "deletedCount": number}` |
+| **`GET`** | `/api/history/:sessionId` | User selects a conversation from history | *None (URL param)* | `{"sessionId": string, "messages": Array<MessageWithClaims>}` |
+| **`DELETE`** | `/api/messages/:messageId` | User deletes an individual message | *None (URL param)* | `{"success": true, "deletedMessageId": string}` |
+| **`PATCH`** | `/api/messages/:messageId` | User edits message content | `{"content": string}` | `{"message": {id: string, content: string}}` |
+
+---
+
+### 2. Detailed Route Specifications
+
+#### `POST /api/chat`
+Submits a message within a conversation session and returns a validated structured response.
 - **Request Body**:
   ```json
   {
@@ -305,11 +359,8 @@ Submit a message within a conversation session and receive a validated structure
   - `500 Internal Server Error`: LLM parsing error or database persistence failure.
   - `502 Bad Gateway`: Upstream LLM provider (Groq/Gemini) rate limit (429) or unreachable.
 
----
-
-### 2. `GET /api/health`
+#### `GET /api/health`
 Real-time telemetry and health status of the application, active LLM model, and guardrails.
-
 - **Response (HTTP 200)**:
   ```json
   {
@@ -321,20 +372,8 @@ Real-time telemetry and health status of the application, active LLM model, and 
   }
   ```
 
----
-
-### 3. `GET /api/sessions` & `POST /api/sessions`
-List all active conversations or create a new session.
-
-- **GET `/api/sessions`**: Returns `{ "sessions": [{ "id": "...", "title": "...", "createdAt": "...", "messageCount": 4 }] }`
-- **POST `/api/sessions`**: Creates a new session with an optional title `{ "title": "Plant Protein Inquiry" }`.
-- **DELETE `/api/sessions`**: Clears all sessions (with cascading message and claim deletion).
-
----
-
-### 4. `GET /api/history/:sessionId`
+#### `GET /api/history/:sessionId`
 Retrieve full conversation message history and extracted claims for a specific session.
-
 - **Response (HTTP 200)**:
   ```json
   {
@@ -361,8 +400,29 @@ Retrieve full conversation message history and extracted claims for a specific s
 
 ---
 
-### 5. `DELETE /api/messages/:messageId` & `PATCH /api/messages/:messageId`
-Delete an individual message or edit its content.
+### 3. Server-to-External API Calls (Backend $\rightarrow$ LLMs & Database)
+
+These server-side integrations run isolated in route handlers. API keys remain strictly confidential on the server.
+
+#### A. LLM Inference Engine APIs
+1. **Groq Cloud API (`groq-sdk`)**:
+   - **Target**: `https://api.groq.com/openai/v1/chat/completions`
+   - **Model**: `openai/gpt-oss-120b` (Default) or `qwen/qwen3.6-27b`
+   - **Payload**: Includes system prompt (`NUTRITION_SYSTEM_PROMPT`), rolling 6-turn history, and `{ response_format: { type: "json_object" } }`.
+   - **Execution Module**: [`src/lib/groq.ts`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/src/lib/groq.ts)
+
+2. **Google Gemini API (`@google/genai`)**:
+   - **Target**: `https://generativelanguage.googleapis.com/...`
+   - **Model**: `gemini-2.5-flash` (Fallback / Secondary)
+   - **Payload**: Strict structured JSON schema definition via `response_schema`.
+   - **Execution Module**: [`src/lib/gemini.ts`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/src/lib/gemini.ts)
+
+#### B. Prisma ORM Database Operations
+All database queries are executed via [`src/lib/db.ts`](file:///C:/Users/HP/workspace/AI_AI_AI/ToDo/tempor/nutrition-chatbot/src/lib/db.ts):
+- `prisma.session`: `findMany()`, `create()`, `delete()`, `deleteMany()` (with cascade delete on messages and claims).
+- `prisma.message`: `findMany({ take: 6 })` (context window history retrieval), `create({ include: { claims: true } })`.
+- `prisma.claim`: `createMany()` (decomposed atomic claims).
+- `prisma.failureLog`: `create()`, `findMany()` (benchmark telemetry).
 
 ---
 
