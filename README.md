@@ -128,47 +128,36 @@ graph TD
 sequenceDiagram
     autonumber
     actor User as User
-    participant UI as React Frontend
-    participant API as /api/chat Endpoint
-    participant Guard as Pre-LLM Guardrail
-    participant LLM as Groq / Gemini LLM
-    participant Val as Zod Validator
-    participant DB as Prisma Database
+    participant UI as React Frontend (Next.js / Vite SPA)
+    participant API as Serverless Route (/api/chat)
+    participant Guard as Deterministic Pre-LLM Guardrail
+    participant DB as Prisma SQLite / Postgres DB
+    participant LLM as Groq LPU (openai/gpt-oss-120b)
 
-    User->>UI: Enters query & submits (or clicks Prompt Chip)
-    UI->>UI: Appends optimistic user message to feed
+    User->>UI: Enters nutritional query or clicks prompt chip
+    UI->>UI: Optimistically appends user message to feed
     UI->>API: POST /api/chat { sessionId, message }
     
-    rect rgb(240, 245, 255)
-        note over API,Guard: Step 1: Input Normalization & Guardrail Evaluation
-        API->>Guard: evaluateScope(message)
-        alt Out-of-Scope (Calorie Targets, Target Weight, Clinical Medical Advice)
-            Guard-->>API: Match found: REJECT { reason, refusalText }
-            API->>DB: Persist User Message & Deterministic Refusal Record
-            API-->>UI: HTTP 200 OK (Safe Refusal JSON with claim source: null)
-            UI->>UI: Render professional refusal banner; Sources panel shows 0 citations
-        end
-    end
-
-    rect rgb(245, 255, 240)
-        note over API,LLM: Step 2: Context Retrieval & Model Inference
-        API->>DB: Fetch last 6 conversation turns for sessionId
+    API->>Guard: evaluateScope(message)
+    
+    alt Case A: Out-of-Scope Trigger (Calorie Targets, Weight Prescriptions, Disease Therapy)
+        Guard-->>API: MATCH_PROHIBITED { reason, refusalText }
+        API->>DB: Persist User Message & Deterministic Refusal Record
+        API-->>UI: HTTP 200 OK Refusal JSON (answer prose + claim with source: null)
+        UI->>UI: Render professional refusal banner; Sources panel remains in M1 baseline state
+    else Case B: Approved In-Scope Food & Nutrition Query
+        API->>DB: Fetch rolling conversation history (last 6 turns)
+        DB-->>API: Return recent session messages
         API->>API: Assemble system prompt + history + JSON schema instructions
         API->>LLM: chat.completions.create({ model: "openai/gpt-oss-120b", response_format: { type: "json_object" } })
         LLM-->>API: Raw JSON string { answer: "...", claims: [...] }
-    end
-
-    rect rgb(255, 250, 240)
-        note over API,DB: Step 3: Sanitization, Validation & Persistence
-        API->>API: Strip Markdown fences & enforce claim sources = null
-        API->>Val: NutritionAssistantResponseSchema.parse(json)
-        Val-->>API: Validated Typed Response
-        API->>DB: Persist User Message, Assistant Message, and Discrete Claims
+        API->>API: Strip Markdown fences & enforce all claim sources = null
+        API->>API: Zod validate against NutritionAssistantResponseSchema
+        API->>DB: Persist User Message, Assistant Message & Decomposed Claims
         API-->>UI: HTTP 200 OK NutritionAssistantResponse JSON
+        UI->>UI: Render Markdown formatted answer in stream
+        UI->>UI: Populate Claims Inspector / Sources Sidecar with extracted claims
     end
-
-    UI->>UI: Render Markdown formatted answer
-    UI->>UI: Update SourcesPanel / ClaimsInspector with atomic extracted claims
 ```
 
 ---
