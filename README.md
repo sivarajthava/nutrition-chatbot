@@ -130,22 +130,6 @@ The repository is built with a **dual-topology architecture**:
 1. **Integrated Next.js Fullstack (`/src`)**: Next.js 16 App Router containing both UI components (`src/app/page.tsx`, `src/components/`) and API routes (`src/app/api/`). Can be run and deployed as a unified container.
 2. **Standalone React Client (`/client`)**: Decoupled Vite + React 19 Single-Page Application (SPA) communicating over REST to the backend using `VITE_API_URL` or a local proxy.
 
-```mermaid
-flowchart LR
-    subgraph ClientWorkspace["Standalone React SPA (/client)"]
-        ViteApp["Vite + React 19 UI"]
-        ViteApp --> Components["ThemeToggle, HeaderBar, SessionSidebar, ChatBox, ClaimsInspector"]
-    end
-
-    subgraph FullstackWorkspace["Next.js Fullstack (/src)"]
-        NextUI["Integrated Next.js UI"]
-        NextAPI["Next.js Server API Routes (/api/chat, /api/sessions, /api/history, /api/health)"]
-    end
-
-    ViteApp <-->|REST API (VITE_API_URL)| NextAPI
-    NextUI <-->|Internal Route Handlers| NextAPI
-```
-
 ---
 
 ### Dual-Layer Scope Guardrails
